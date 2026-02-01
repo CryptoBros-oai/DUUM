@@ -546,17 +546,16 @@ class Renderer {
       const top=sH*0.35, bottom=-sH*0.65;
       if(right<-1||left>1) continue;
 
-      // Wall occlusion - check multiple columns for robustness
-      const spriteAngle=Math.atan(sp.screenX);
-      const normalizedCol=(spriteAngle/halfFov+1)/2;
-      const centerCol=Math.floor(normalizedCol*this.rayCount);
-      const col=Math.max(0,Math.min(this.rayCount-1,centerCol));
+      // Wall occlusion: find which column this sprite's center falls on
+      // Must match raycast: col i -> angle + ((i/rayCount) - 0.5) * fov
+      // Reverse: screenX = tan(relAngle), so relAngle = atan(screenX)
+      // col = (relAngle/fov + 0.5) * rayCount
+      const relAngle = Math.atan(sp.screenX);
+      const colFloat = (relAngle / this.fov + 0.5) * this.rayCount;
+      const col = Math.floor(Math.max(0, Math.min(this.rayCount - 1, colFloat)));
 
-      // Check center and adjacent columns, use minimum wall distance
-      const colL=Math.max(0,col-1), colR=Math.min(this.rayCount-1,col+1);
-      const minWallDist=Math.min(this.wallDistData[col],this.wallDistData[colL],this.wallDistData[colR]);
-      // Add small margin (0.1) to prevent sprites from appearing on walls
-      if(dist>=minWallDist-0.1) continue;
+      // Compare depths - both are perpendicular distance
+      if (dist >= this.wallDistData[col]) continue;
 
       const li=lighting.calcLightAt(sp.x,sp.y);
       const verts=[[left,top,0,0],[right,top,1,0],[left,bottom,0,1],[right,top,1,0],[right,bottom,1,1],[left,bottom,0,1]];
