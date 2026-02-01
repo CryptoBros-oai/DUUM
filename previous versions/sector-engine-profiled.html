@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sector Engine - Modular Demo</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700&display=swap');
+    
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+      background: #0a0a0c;
+      color: #33ff33;
+      font-family: 'Share Tech Mono', monospace;
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    #header {
+      background: linear-gradient(180deg, #1a1a1f 0%, #0d0d10 100%);
+      border-bottom: 2px solid #33ff33;
+      padding: 10px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    #header h1 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1.1rem;
+      letter-spacing: 3px;
+      text-shadow: 0 0 10px rgba(51, 255, 51, 0.5);
+    }
+    
+    .tag { font-size: 0.55rem; color: #666; margin-left: 10px; letter-spacing: 2px; }
+    
+    #stats { display: flex; gap: 20px; font-size: 0.75rem; }
+    .stat { display: flex; flex-direction: column; align-items: center; }
+    .stat-label { color: #555; font-size: 0.6rem; letter-spacing: 2px; }
+    .stat-value { color: #33ff33; }
+    
+    #main { flex: 1; display: flex; padding: 10px; min-height: 0; }
+    
+    #viewport {
+      flex: 2;
+      position: relative;
+      border: 2px solid #1a1a1a;
+      border-radius: 4px;
+      overflow: hidden;
+      background: #000;
+    }
+    
+    #game-canvas { width: 100%; height: 100%; display: block; }
+    
+    #click-prompt {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.9);
+      border: 1px solid #33ff33;
+      padding: 16px 32px;
+      text-align: center;
+      cursor: pointer;
+    }
+    #click-prompt:hover { background: rgba(51, 255, 51, 0.1); }
+    #click-prompt.hidden { display: none; }
+    #click-prompt h2 { font-family: 'Orbitron', sans-serif; font-size: 0.9rem; letter-spacing: 2px; }
+    #click-prompt p { font-size: 0.7rem; color: #888; margin-top: 6px; }
+    
+    #sidebar {
+      width: 280px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding-left: 10px;
+    }
+    
+    .panel {
+      background: #0f0f12;
+      border: 1px solid #222;
+      border-radius: 4px;
+      padding: 10px;
+    }
+    
+    .panel-title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.65rem;
+      letter-spacing: 2px;
+      color: #444;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+    
+    #minimap-panel { flex: 1; display: flex; flex-direction: column; }
+    #minimap-canvas { flex: 1; width: 100%; border: 1px solid #1a1a1a; background: #030305; }
+    
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.7rem;
+      color: #888;
+      margin-bottom: 4px;
+    }
+    .info-value { color: #33ff33; }
+    .info-warn { color: #ffaa33; }
+    .info-bad { color: #ff5533; }
+    
+    .key {
+      background: #1a1a1f;
+      border: 1px solid #2a2a2a;
+      padding: 1px 5px;
+      border-radius: 2px;
+      color: #33ff33;
+      font-size: 0.65rem;
+    }
+    
+    #perf-panel .panel-title { color: #aa8833; }
+    
+    #perf-graph {
+      height: 40px;
+      background: #0a0a0c;
+      border: 1px solid #222;
+      margin-top: 8px;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    #perf-graph canvas {
+      width: 100%;
+      height: 100%;
+    }
+    
+    #messages {
+      position: absolute;
+      bottom: 12px;
+      left: 12px;
+      max-width: 300px;
+    }
+    
+    .message {
+      background: rgba(0,0,0,0.85);
+      border-left: 2px solid #33ff33;
+      padding: 5px 8px;
+      margin-bottom: 2px;
+      font-size: 0.75rem;
+      animation: msgIn 0.2s ease-out, msgOut 0.3s ease-in 2s forwards;
+    }
+    
+    @keyframes msgIn { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
+    @keyframes msgOut { from { opacity: 1; } to { opacity: 0; } }
+  </style>
+</head>
+<body>
+  <div id="header">
+    <h1>SECTOR ENGINE <span class="tag">MODULAR v1.0</span></h1>
+    <div id="stats">
+      <div class="stat">
+        <span class="stat-label">EXPLORED</span>
+        <span class="stat-value" id="stat-explored">0%</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">SECTOR</span>
+        <span class="stat-value" id="stat-sector">--</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">POS</span>
+        <span class="stat-value" id="stat-pos">0, 0</span>
+      </div>
+    </div>
+  </div>
+  
+  <div id="main">
+    <div id="viewport">
+      <canvas id="game-canvas"></canvas>
+      <div id="click-prompt">
+        <h2>CLICK TO ENGAGE</h2>
+        <p>Mouse + WASD</p>
+      </div>
+      <div id="messages"></div>
+    </div>
+    
+    <div id="sidebar">
+      <div class="panel" id="minimap-panel">
+        <div class="panel-title">TACTICAL MAP</div>
+        <canvas id="minimap-canvas"></canvas>
+      </div>
+      
+      <div class="panel" id="perf-panel">
+        <div class="panel-title">⚡ PERFORMANCE</div>
+        <div class="info-row">
+          <span>FPS</span>
+          <span class="info-value" id="perf-fps">--</span>
+        </div>
+        <div class="info-row">
+          <span>Frame Time</span>
+          <span class="info-value" id="perf-frametime">--</span>
+        </div>
+        <div class="info-row">
+          <span>Update</span>
+          <span class="info-value" id="perf-update">--</span>
+        </div>
+        <div class="info-row">
+          <span>Render</span>
+          <span class="info-value" id="perf-render">--</span>
+        </div>
+        <div class="info-row">
+          <span>Visibility</span>
+          <span class="info-value" id="perf-visibility">--</span>
+        </div>
+        <div id="perf-graph">
+          <canvas id="perf-canvas"></canvas>
+        </div>
+      </div>
+      
+      <div class="panel">
+        <div class="panel-title">CONTROLS</div>
+        <div class="info-row">
+          <span>Move</span>
+          <span><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span></span>
+        </div>
+        <div class="info-row">
+          <span>Look</span>
+          <span>Mouse / <span class="key">←</span><span class="key">→</span></span>
+        </div>
+        <div class="info-row">
+          <span>Run</span>
+          <span><span class="key">Shift</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    // =========================================================
+    // SECTOR ENGINE - MODULAR DEMO WITH PERFORMANCE PROFILING
+    // =========================================================
+    
+    // For standalone use, we inline a compact version of the engine.
+    // In production with a bundler, you'd import from separate files:
+    // import { SectorEngine } from './engine/engine.js';
+    
+    // ============ PERFORMANCE PROFILER ============
+    class Profiler {
+      constructor() {
+        this.samples = {
+          frame: [],
+          update: [],
+          render: [],
+          visibility: []
+        };
+        this.maxSamples = 120;
+        this.current = {};
+      }
+      
+      start(name) {
+        this.current[name] = performance.now();
+      }
+      
+      end(name) {
+        if (this.current[name]) {
+          const duration = performance.now() - this.current[name];
+          if (!this.samples[name]) this.samples[name] = [];
+          this.samples[name].push(duration);
+          if (this.samples[name].length > this.maxSamples) {
+            this.samples[name].shift();
+          }
+          return duration;
+        }
+        return 0;
+      }
+      
+      getAverage(name) {
+        const s = this.samples[name];
+        if (!s || s.length === 0) return 0;
+        return s.reduce((a, b) => a + b, 0) / s.length;
+      }
+      
+      getLast(name) {
+        const s = this.samples[name];
+        return s && s.length > 0 ? s[s.length - 1] : 0;
+      }
+      
+      getHistory(name) {
+        return this.samples[name] || [];
+      }
+    }
+    
+    const profiler = new Profiler();
+    
+    // ============ COMPACT ENGINE (inline for standalone) ============
+    
+    class World {
+      constructor(config = {}) {
+        this.width = config.width || 32;
+        this.height = config.height || 32;
+        this.grid = Array(this.height).fill(null).map(() => Array(this.width).fill('void'));
+        this.sectorTypes = new Map();
+        this.sectorTypes.set('void', {
+          floor: -10, ceiling: -10, walkable: false,
+          floorColor: [20, 20, 25], wallColor: [40, 40, 50], name: 'VOID'
+        });
+      }
+      
+      registerSectorTypes(types) {
+        for (const [key, def] of Object.entries(types)) {
+          this.sectorTypes.set(key, def);
+        }
+      }
+      
+      getSector(x, y) {
+        const gx = Math.floor(x), gy = Math.floor(y);
+        if (gx < 0 || gx >= this.width || gy < 0 || gy >= this.height) {
+          return this.sectorTypes.get('void');
+        }
+        return this.sectorTypes.get(this.grid[gy][gx]) || this.sectorTypes.get('void');
+      }
+      
+      fillRect(x1, y1, x2, y2, type) {
+        const minX = Math.max(0, Math.min(x1, x2));
+        const maxX = Math.min(this.width - 1, Math.max(x1, x2));
+        const minY = Math.max(0, Math.min(y1, y2));
+        const maxY = Math.min(this.height - 1, Math.max(y1, y2));
+        for (let y = minY; y <= maxY; y++) {
+          for (let x = minX; x <= maxX; x++) {
+            this.grid[y][x] = type;
+          }
+        }
+      }
+      
+      countWalkable() {
+        let count = 0;
+        for (let y = 0; y < this.height; y++) {
+          for (let x = 0; x < this.width; x++) {
+            if (this.getSector(x, y).walkable) count++;
+          }
+        }
+        return count;
+      }
+    }
+    
+    class Visibility {
+      constructor(world, config = {}) {
+        this.world = world;
+        this.viewDistance = config.viewDistance || 14;
+        this.discovered = new Set();
+        this.currentlyVisible = new Set();
+        this.totalWalkable = world.countWalkable();
+        this.lastPlayerCell = null;
+      }
+      
+      update(x, y, forceUpdate = false) {
+        // Optimization: only recalculate if player changed cells
+        const cell = `${Math.floor(x)},${Math.floor(y)}`;
+        if (!forceUpdate && cell === this.lastPlayerCell) {
+          return false; // No update needed
+        }
+        this.lastPlayerCell = cell;
+        
+        profiler.start('visibility');
+        
+        this.currentlyVisible.clear();
+        const rayCount = 180;
+        const step = 0.4;
+        
+        for (let i = 0; i < rayCount; i++) {
+          const angle = (i / rayCount) * Math.PI * 2;
+          const dx = Math.cos(angle) * step;
+          const dy = Math.sin(angle) * step;
+          let rx = x, ry = y;
+          
+          for (let d = 0; d < this.viewDistance; d += step) {
+            rx += dx;
+            ry += dy;
+            const gx = Math.floor(rx), gy = Math.floor(ry);
+            const key = `${gx},${gy}`;
+            this.currentlyVisible.add(key);
+            const sector = this.world.getSector(rx, ry);
+            if (sector.walkable) this.discovered.add(key);
+            if (!sector.walkable) break;
+          }
+        }
+        
+        profiler.end('visibility');
+        return true;
+      }
+      
+      isVisible(gx, gy) { return this.currentlyVisible.has(`${gx},${gy}`); }
+      isDiscovered(gx, gy) { return this.discovered.has(`${gx},${gy}`); }
+      
+      getDiscoveryPercent() {
+        let count = 0;
+        for (const key of this.discovered) {
+          const [x, y] = key.split(',').map(Number);
+          if (this.world.getSector(x, y).walkable) count++;
+        }
+        return Math.round((count / this.totalWalkable) * 100);
+      }
+    }
+    
+    class Movement {
+      constructor(world) {
+        this.world = world;
+      }
+      
+      move(entity, dx, dy) {
+        const r = entity.radius || 0.2;
+        const newX = entity.x + dx, newY = entity.y + dy;
+        
+        if (this._canOccupy(newX, newY, r)) return { x: newX, y: newY };
+        if (this._canOccupy(newX, entity.y, r)) return { x: newX, y: entity.y };
+        if (this._canOccupy(entity.x, newY, r)) return { x: entity.x, y: newY };
+        return { x: entity.x, y: entity.y };
+      }
+      
+      _canOccupy(x, y, r) {
+        const points = [[x,y], [x-r,y-r], [x+r,y-r], [x-r,y+r], [x+r,y+r]];
+        for (const [px, py] of points) {
+          if (!this.world.getSector(px, py).walkable) return false;
+        }
+        return true;
+      }
+    }
+    
+    class Input {
+      constructor() {
+        this.keys = {};
+        this.mouseDX = 0;
+        this.locked = false;
+      }
+      
+      init(target) {
+        window.addEventListener('keydown', e => {
+          this.keys[e.code] = true;
+          if (['KeyW','KeyA','KeyS','KeyD','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.code)) {
+            e.preventDefault();
+          }
+        });
+        window.addEventListener('keyup', e => this.keys[e.code] = false);
+        document.addEventListener('mousemove', e => {
+          if (this.locked) this.mouseDX += e.movementX;
+        });
+        document.addEventListener('pointerlockchange', () => {
+          this.locked = document.pointerLockElement === target;
+          document.getElementById('click-prompt').classList.toggle('hidden', this.locked);
+        });
+        target.addEventListener('click', () => {
+          if (!this.locked) target.requestPointerLock();
+        });
+      }
+      
+      getMovement(dt, speed) {
+        let forward = 0, strafe = 0, turn = 0;
+        if (this.keys['KeyW'] || this.keys['ArrowUp']) forward += speed;
+        if (this.keys['KeyS'] || this.keys['ArrowDown']) forward -= speed;
+        if (this.keys['KeyA']) strafe -= speed;
+        if (this.keys['KeyD']) strafe += speed;
+        if (this.keys['ArrowLeft']) turn -= 2.2 * dt;
+        if (this.keys['ArrowRight']) turn += 2.2 * dt;
+        if (this.keys['ShiftLeft'] || this.keys['ShiftRight']) {
+          forward *= 1.7; strafe *= 1.7;
+        }
+        turn += this.mouseDX * 0.002;
+        this.mouseDX = 0;
+        return { forward, strafe, turn };
+      }
+    }
+    
+    class Renderer {
+      constructor(config = {}) {
+        this.rayCount = config.rayCount || 320;
+        this.fov = config.fov || Math.PI * 0.6;
+        this.maxDepth = config.maxDepth || 20;
+        this.ambient = config.ambient || 0.35;
+        
+        // Pre-calculate sin/cos tables for optimization
+        this.sinTable = new Float32Array(3600);
+        this.cosTable = new Float32Array(3600);
+        for (let i = 0; i < 3600; i++) {
+          const angle = (i / 3600) * Math.PI * 2;
+          this.sinTable[i] = Math.sin(angle);
+          this.cosTable[i] = Math.cos(angle);
+        }
+      }
+      
+      init(canvas) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+      }
+      
+      resize() {
+        const c = this.canvas.parentElement;
+        this.width = c.clientWidth;
+        this.height = c.clientHeight;
+        this.canvas.width = this.width;
+        this.canvas.height = this.height;
+      }
+      
+      // Lookup table helpers
+      _sin(angle) {
+        const idx = Math.floor(((angle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2) / (Math.PI * 2) * 3600);
+        return this.sinTable[idx];
+      }
+      
+      _cos(angle) {
+        const idx = Math.floor(((angle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2) / (Math.PI * 2) * 3600);
+        return this.cosTable[idx];
+      }
+      
+      render(world, visibility, px, py, angle) {
+        profiler.start('render');
+        
+        const ctx = this.ctx, w = this.width, h = this.height;
+        
+        // Sky gradient
+        const sky = ctx.createLinearGradient(0, 0, 0, h * 0.5);
+        sky.addColorStop(0, '#1a1d28');
+        sky.addColorStop(1, '#2d323f');
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, w, h * 0.5);
+        
+        // Floor gradient
+        const floor = ctx.createLinearGradient(0, h * 0.5, 0, h);
+        floor.addColorStop(0, '#3a3d45');
+        floor.addColorStop(1, '#1a1c22');
+        ctx.fillStyle = floor;
+        ctx.fillRect(0, h * 0.5, w, h * 0.5);
+        
+        // Raycast walls
+        const colW = Math.ceil(w / this.rayCount);
+        const halfFov = this.fov * 0.5;
+        
+        for (let i = 0; i < this.rayCount; i++) {
+          const rayAngle = angle + ((i / this.rayCount) - 0.5) * this.fov;
+          this._castRay(ctx, world, visibility, px, py, angle, rayAngle, i, colW, w, h);
+        }
+        
+        // Vignette
+        const vig = ctx.createRadialGradient(w*0.5, h*0.5, h*0.3, w*0.5, h*0.5, h*0.85);
+        vig.addColorStop(0, 'rgba(0,0,0,0)');
+        vig.addColorStop(1, 'rgba(0,0,0,0.5)');
+        ctx.fillStyle = vig;
+        ctx.fillRect(0, 0, w, h);
+        
+        // Crosshair
+        const cx = w * 0.5, cy = h * 0.5;
+        ctx.strokeStyle = 'rgba(51,255,51,0.7)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(cx - 12, cy); ctx.lineTo(cx - 5, cy);
+        ctx.moveTo(cx + 5, cy); ctx.lineTo(cx + 12, cy);
+        ctx.moveTo(cx, cy - 12); ctx.lineTo(cx, cy - 5);
+        ctx.moveTo(cx, cy + 5); ctx.lineTo(cx, cy + 12);
+        ctx.stroke();
+        
+        profiler.end('render');
+      }
+      
+      _castRay(ctx, world, vis, px, py, viewAngle, rayAngle, col, colW, w, h) {
+        const step = 0.02;
+        const cosAngle = Math.cos(rayAngle);
+        const sinAngle = Math.sin(rayAngle);
+        const cosCorrection = Math.cos(rayAngle - viewAngle);
+        
+        let x = px, y = py, dist = 0;
+        
+        while (dist < this.maxDepth) {
+          x += cosAngle * step;
+          y += sinAngle * step;
+          dist += step;
+          
+          const gx = Math.floor(x), gy = Math.floor(y);
+          const sector = world.getSector(x, y);
+          
+          if (!sector.walkable) {
+            const visible = vis.isVisible(gx, gy);
+            const discovered = vis.isDiscovered(gx, gy);
+            if (!visible && !discovered) return;
+            
+            const corrDist = dist * cosCorrection;
+            const wallH = Math.min(h * 2, (h * 0.85) / corrDist);
+            const wallTop = (h - wallH) * 0.5;
+            
+            let [r, g, b] = sector.wallColor;
+            const isNS = (x - gx < 0.05 || x - gx > 0.95);
+            if (isNS) { r *= 0.8; g *= 0.8; b *= 0.8; }
+            
+            const shade = Math.max(this.ambient, 1 - corrDist * 0.06);
+            r *= shade; g *= shade; b *= shade;
+            
+            const fog = Math.max(0, Math.min(1, (corrDist - 8) * 0.1));
+            r = r * (1 - fog) + 25 * fog;
+            g = g * (1 - fog) + 28 * fog;
+            b = b * (1 - fog) + 35 * fog;
+            
+            if (!visible && discovered) {
+              const lum = (r + g + b) / 3;
+              r = lum * 0.6; g = lum * 0.6; b = lum * 0.65;
+            }
+            
+            ctx.fillStyle = `rgb(${r|0},${g|0},${b|0})`;
+            ctx.fillRect(col * colW, wallTop, colW + 1, wallH);
+            
+            if (visible && isNS && colW > 1) {
+              ctx.fillStyle = `rgba(255,255,255,${0.08 * shade})`;
+              ctx.fillRect(col * colW, wallTop, 1, wallH);
+            }
+            return;
+          }
+        }
+      }
+    }
+    
+    class Minimap {
+      constructor(config = {}) {
+        this.fov = config.fov || Math.PI * 0.6;
+        this.viewDist = config.viewDistance || 14;
+      }
+      
+      init(canvas) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+      }
+      
+      resize() {
+        const c = this.canvas.parentElement;
+        const size = Math.min(c.clientWidth - 20, c.clientHeight - 36);
+        this.canvas.width = size;
+        this.canvas.height = size;
+      }
+      
+      render(world, vis, px, py, angle) {
+        const ctx = this.ctx;
+        const w = this.canvas.width, h = this.canvas.height;
+        const cellW = w / world.width, cellH = h / world.height;
+        
+        ctx.fillStyle = '#030305';
+        ctx.fillRect(0, 0, w, h);
+        
+        for (let gy = 0; gy < world.height; gy++) {
+          for (let gx = 0; gx < world.width; gx++) {
+            const sector = world.getSector(gx, gy);
+            const visible = vis.isVisible(gx, gy);
+            const discovered = vis.isDiscovered(gx, gy);
+            
+            let color;
+            if (!discovered && !visible) color = '#06060a';
+            else if (!sector.walkable) color = visible ? '#3a3a42' : '#1a1a22';
+            else if (visible) {
+              const c = sector.floorColor;
+              color = `rgb(${c[0]*0.8|0},${c[1]*0.8|0},${c[2]*0.8|0})`;
+            } else color = '#18181e';
+            
+            ctx.fillStyle = color;
+            ctx.fillRect(gx * cellW, gy * cellH, cellW + 0.5, cellH + 0.5);
+          }
+        }
+        
+        const mapX = px * cellW, mapY = py * cellH;
+        const coneLen = this.viewDist * cellW;
+        
+        ctx.fillStyle = 'rgba(51,255,51,0.12)';
+        ctx.beginPath();
+        ctx.moveTo(mapX, mapY);
+        ctx.lineTo(mapX + Math.cos(angle - this.fov*0.5) * coneLen, mapY + Math.sin(angle - this.fov*0.5) * coneLen);
+        ctx.arc(mapX, mapY, coneLen, angle - this.fov*0.5, angle + this.fov*0.5);
+        ctx.fill();
+        
+        ctx.fillStyle = '#33ff33';
+        ctx.shadowColor = '#33ff33';
+        ctx.shadowBlur = 6;
+        ctx.beginPath();
+        ctx.arc(mapX, mapY, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        
+        ctx.strokeStyle = '#33ff33';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(mapX, mapY);
+        ctx.lineTo(mapX + Math.cos(angle) * 8, mapY + Math.sin(angle) * 8);
+        ctx.stroke();
+      }
+    }
+    
+    // ============ LEVEL DATA ============
+    const SECTOR_TYPES = {
+      hangar: { floor: 0, ceiling: 1.4, floorColor: [80, 82, 88], wallColor: [110, 115, 125], walkable: true, name: 'HANGAR' },
+      hangar_platform: { floor: 0.2, ceiling: 1.4, floorColor: [120, 110, 85], wallColor: [140, 130, 100], walkable: true, name: 'PLATFORM' },
+      corridor: { floor: 0, ceiling: 1.1, floorColor: [75, 78, 85], wallColor: [100, 105, 115], walkable: true, name: 'CORRIDOR' },
+      zigzag: { floor: 0.05, ceiling: 1.5, floorColor: [70, 90, 78], wallColor: [95, 120, 105], walkable: true, name: 'OPS CENTER' },
+      computer: { floor: 0.1, ceiling: 1.2, floorColor: [75, 80, 100], wallColor: [100, 108, 130], walkable: true, name: 'TERMINAL BAY' },
+      outdoor: { floor: -0.1, ceiling: 4.0, floorColor: [100, 95, 80], wallColor: [130, 125, 110], walkable: true, name: 'EXTERIOR' },
+      pillar: { floor: 0, ceiling: 1.5, floorColor: [130, 125, 118], wallColor: [150, 145, 138], walkable: false, name: 'PILLAR' },
+      crate: { floor: 0.5, ceiling: 1.2, floorColor: [130, 105, 70], wallColor: [150, 125, 85], walkable: false, name: 'CRATE' }
+    };
+    
+    const REGIONS = [
+      { type: 'hangar', x1: 1, y1: 9, x2: 7, y2: 15 },
+      { type: 'hangar_platform', x1: 4, y1: 11, x2: 6, y2: 13 },
+      { type: 'corridor', x1: 7, y1: 11, x2: 11, y2: 13 },
+      { type: 'corridor', x1: 17, y1: 11, x2: 19, y2: 13 },
+      { type: 'zigzag', x1: 11, y1: 7, x2: 17, y2: 17 },
+      { type: 'pillar', x1: 13, y1: 9, x2: 13, y2: 9 },
+      { type: 'pillar', x1: 15, y1: 9, x2: 15, y2: 9 },
+      { type: 'pillar', x1: 13, y1: 15, x2: 13, y2: 15 },
+      { type: 'pillar', x1: 15, y1: 15, x2: 15, y2: 15 },
+      { type: 'computer', x1: 19, y1: 9, x2: 23, y2: 15 },
+      { type: 'crate', x1: 21, y1: 10, x2: 22, y2: 10 },
+      { type: 'crate', x1: 21, y1: 14, x2: 21, y2: 14 },
+      { type: 'outdoor', x1: 1, y1: 1, x2: 7, y2: 7 },
+      { type: 'hangar', x1: 3, y1: 8, x2: 5, y2: 8 }
+    ];
+    
+    // ============ SETUP ============
+    const world = new World({ width: 24, height: 24 });
+    world.registerSectorTypes(SECTOR_TYPES);
+    REGIONS.forEach(r => world.fillRect(r.x1, r.y1, r.x2, r.y2, r.type));
+    
+    const visibility = new Visibility(world, { viewDistance: 14 });
+    const movement = new Movement(world);
+    const input = new Input();
+    const renderer = new Renderer({ rayCount: 320 });
+    const minimap = new Minimap({ viewDistance: 14 });
+    
+    const player = { x: 3.5, y: 12.5, angle: 0, radius: 0.2, speed: 3.0 };
+    
+    // Initialize
+    renderer.init(document.getElementById('game-canvas'));
+    minimap.init(document.getElementById('minimap-canvas'));
+    input.init(document.getElementById('viewport'));
+    visibility.update(player.x, player.y, true);
+    
+    // Perf graph
+    const perfCanvas = document.getElementById('perf-canvas');
+    const perfCtx = perfCanvas.getContext('2d');
+    perfCanvas.width = perfCanvas.parentElement.clientWidth;
+    perfCanvas.height = 40;
+    
+    function drawPerfGraph() {
+      const w = perfCanvas.width, h = perfCanvas.height;
+      perfCtx.fillStyle = '#0a0a0c';
+      perfCtx.fillRect(0, 0, w, h);
+      
+      const history = profiler.getHistory('frame');
+      if (history.length < 2) return;
+      
+      const maxMs = 50; // 50ms = 20fps line
+      
+      // 60fps line
+      perfCtx.strokeStyle = '#1a3a1a';
+      perfCtx.beginPath();
+      perfCtx.moveTo(0, h - (16.67 / maxMs) * h);
+      perfCtx.lineTo(w, h - (16.67 / maxMs) * h);
+      perfCtx.stroke();
+      
+      // 30fps line
+      perfCtx.strokeStyle = '#3a3a1a';
+      perfCtx.beginPath();
+      perfCtx.moveTo(0, h - (33.33 / maxMs) * h);
+      perfCtx.lineTo(w, h - (33.33 / maxMs) * h);
+      perfCtx.stroke();
+      
+      // Frame time graph
+      perfCtx.strokeStyle = '#33ff33';
+      perfCtx.lineWidth = 1;
+      perfCtx.beginPath();
+      
+      const step = w / (history.length - 1);
+      for (let i = 0; i < history.length; i++) {
+        const x = i * step;
+        const y = h - Math.min(1, history[i] / maxMs) * h;
+        if (i === 0) perfCtx.moveTo(x, y);
+        else perfCtx.lineTo(x, y);
+      }
+      perfCtx.stroke();
+    }
+    
+    // UI
+    function showMessage(text) {
+      const log = document.getElementById('messages');
+      const msg = document.createElement('div');
+      msg.className = 'message';
+      msg.textContent = text;
+      log.appendChild(msg);
+      setTimeout(() => msg.remove(), 2500);
+    }
+    
+    function updateUI() {
+      document.getElementById('stat-explored').textContent = visibility.getDiscoveryPercent() + '%';
+      document.getElementById('stat-sector').textContent = world.getSector(player.x, player.y).name || '--';
+      document.getElementById('stat-pos').textContent = `${player.x.toFixed(1)}, ${player.y.toFixed(1)}`;
+    }
+    
+    function updatePerfUI() {
+      const fps = 1000 / Math.max(1, profiler.getAverage('frame'));
+      const fpsEl = document.getElementById('perf-fps');
+      fpsEl.textContent = fps.toFixed(0);
+      fpsEl.className = fps >= 55 ? 'info-value' : fps >= 30 ? 'info-warn' : 'info-bad';
+      
+      document.getElementById('perf-frametime').textContent = profiler.getAverage('frame').toFixed(2) + 'ms';
+      document.getElementById('perf-update').textContent = profiler.getAverage('update').toFixed(2) + 'ms';
+      document.getElementById('perf-render').textContent = profiler.getAverage('render').toFixed(2) + 'ms';
+      document.getElementById('perf-visibility').textContent = profiler.getAverage('visibility').toFixed(2) + 'ms';
+      
+      drawPerfGraph();
+    }
+    
+    // Game loop
+    let lastTime = 0;
+    let perfUpdateTimer = 0;
+    
+    function gameLoop(time) {
+      profiler.start('frame');
+      
+      const dt = Math.min((time - lastTime) / 1000, 0.1);
+      lastTime = time;
+      
+      // Update
+      profiler.start('update');
+      
+      const move = input.getMovement(dt, player.speed * dt);
+      player.angle += move.turn;
+      while (player.angle < 0) player.angle += Math.PI * 2;
+      while (player.angle >= Math.PI * 2) player.angle -= Math.PI * 2;
+      
+      const fx = Math.cos(player.angle), fy = Math.sin(player.angle);
+      const sx = Math.cos(player.angle + Math.PI * 0.5), sy = Math.sin(player.angle + Math.PI * 0.5);
+      const dx = fx * move.forward + sx * move.strafe;
+      const dy = fy * move.forward + sy * move.strafe;
+      
+      if (dx !== 0 || dy !== 0) {
+        const result = movement.move(player, dx, dy);
+        player.x = result.x;
+        player.y = result.y;
+      }
+      
+      visibility.update(player.x, player.y);
+      
+      profiler.end('update');
+      
+      // Render
+      renderer.render(world, visibility, player.x, player.y, player.angle);
+      minimap.render(world, visibility, player.x, player.y, player.angle);
+      
+      profiler.end('frame');
+      
+      // UI updates (throttled)
+      perfUpdateTimer += dt;
+      if (perfUpdateTimer > 0.1) {
+        perfUpdateTimer = 0;
+        updateUI();
+        updatePerfUI();
+      }
+      
+      requestAnimationFrame(gameLoop);
+    }
+    
+    // Start
+    showMessage('SECTOR ENGINE - Modular Architecture');
+    showMessage('Performance profiling enabled');
+    requestAnimationFrame(gameLoop);
+  </script>
+</body>
+</html>

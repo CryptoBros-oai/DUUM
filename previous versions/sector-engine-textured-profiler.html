@@ -1,0 +1,1333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sector Engine - Textured + Profiler</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700&display=swap');
+    
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+      background: #0a0a0c;
+      color: #33ff33;
+      font-family: 'Share Tech Mono', monospace;
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    #header {
+      background: linear-gradient(180deg, #1a1a1f 0%, #0d0d10 100%);
+      border-bottom: 2px solid #33ff33;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    #header h1 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1rem;
+      letter-spacing: 3px;
+      text-shadow: 0 0 10px rgba(51, 255, 51, 0.5);
+    }
+    
+    .tag { font-size: 0.5rem; color: #aa6633; margin-left: 8px; letter-spacing: 2px; }
+    
+    #stats { display: flex; gap: 16px; font-size: 0.7rem; }
+    .stat { display: flex; flex-direction: column; align-items: center; }
+    .stat-label { color: #555; font-size: 0.55rem; letter-spacing: 1px; }
+    .stat-value { color: #33ff33; }
+    .stat-value.warn { color: #ffaa33; }
+    .stat-value.bad { color: #ff5533; }
+    
+    #main { flex: 1; display: flex; padding: 8px; min-height: 0; gap: 8px; }
+    
+    #viewport {
+      flex: 2;
+      position: relative;
+      border: 2px solid #1a1a1a;
+      border-radius: 4px;
+      overflow: hidden;
+      background: #000;
+    }
+    
+    #game-canvas { width: 100%; height: 100%; display: block; }
+    
+    #click-prompt {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.9);
+      border: 1px solid #33ff33;
+      padding: 14px 28px;
+      text-align: center;
+      cursor: pointer;
+    }
+    #click-prompt:hover { background: rgba(51, 255, 51, 0.1); }
+    #click-prompt.hidden { display: none; }
+    #click-prompt h2 { font-family: 'Orbitron', sans-serif; font-size: 0.85rem; letter-spacing: 2px; }
+    #click-prompt p { font-size: 0.65rem; color: #888; margin-top: 5px; }
+    
+    #sidebar {
+      width: 260px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      overflow-y: auto;
+    }
+    
+    .panel {
+      background: #0f0f12;
+      border: 1px solid #222;
+      border-radius: 4px;
+      padding: 8px;
+    }
+    
+    .panel-title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.6rem;
+      letter-spacing: 2px;
+      color: #444;
+      margin-bottom: 6px;
+    }
+    
+    #minimap-panel { flex: 0 0 auto; height: 200px; display: flex; flex-direction: column; }
+    #minimap-canvas { flex: 1; width: 100%; border: 1px solid #1a1a1a; background: #030305; }
+    
+    .perf-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.65rem;
+      color: #666;
+      margin-bottom: 3px;
+    }
+    .perf-value { color: #33ff33; min-width: 50px; text-align: right; }
+    .perf-value.warn { color: #ffaa33; }
+    .perf-value.bad { color: #ff5533; }
+    
+    .perf-bar {
+      height: 4px;
+      background: #1a1a1a;
+      margin: 2px 0 6px 0;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .perf-bar-fill {
+      height: 100%;
+      background: #33ff33;
+      transition: width 0.1s;
+    }
+    .perf-bar-fill.warn { background: #ffaa33; }
+    .perf-bar-fill.bad { background: #ff5533; }
+    
+    #perf-graph {
+      height: 50px;
+      background: #0a0a0c;
+      border: 1px solid #1a1a1a;
+      margin-top: 6px;
+      position: relative;
+    }
+    #perf-graph canvas { width: 100%; height: 100%; }
+    .graph-label {
+      position: absolute;
+      font-size: 0.5rem;
+      color: #444;
+      right: 2px;
+    }
+    .graph-label.fps60 { top: 0; }
+    .graph-label.fps30 { top: 50%; transform: translateY(-50%); }
+    
+    .slider-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.6rem;
+      color: #888;
+      margin-bottom: 4px;
+    }
+    .slider-row input[type="range"] {
+      width: 80px;
+      height: 4px;
+      -webkit-appearance: none;
+      background: #1a1a1a;
+      border-radius: 2px;
+    }
+    .slider-row input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 10px;
+      height: 10px;
+      background: #33ff33;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+    .slider-value {
+      color: #33ff33;
+      min-width: 30px;
+      text-align: right;
+    }
+    
+    .control-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.6rem;
+      color: #888;
+      margin-bottom: 3px;
+    }
+    .key {
+      background: #1a1a1f;
+      border: 1px solid #2a2a2a;
+      padding: 1px 4px;
+      border-radius: 2px;
+      color: #33ff33;
+      font-size: 0.55rem;
+    }
+    
+    #messages {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      max-width: 280px;
+    }
+    .message {
+      background: rgba(0,0,0,0.85);
+      border-left: 2px solid #33ff33;
+      padding: 4px 8px;
+      margin-bottom: 2px;
+      font-size: 0.7rem;
+      animation: msgIn 0.2s ease-out, msgOut 0.3s ease-in 2s forwards;
+    }
+    @keyframes msgIn { from { opacity: 0; transform: translateX(-10px); } }
+    @keyframes msgOut { to { opacity: 0; } }
+  </style>
+</head>
+<body>
+  <div id="header">
+    <h1>SECTOR ENGINE <span class="tag">TEXTURED + PROFILER</span></h1>
+    <div id="stats">
+      <div class="stat">
+        <span class="stat-label">FPS</span>
+        <span class="stat-value" id="stat-fps">--</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">FRAME</span>
+        <span class="stat-value" id="stat-frame">--</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">SECTOR</span>
+        <span class="stat-value" id="stat-sector">--</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">EXPLORED</span>
+        <span class="stat-value" id="stat-explored">0%</span>
+      </div>
+    </div>
+  </div>
+  
+  <div id="main">
+    <div id="viewport">
+      <canvas id="game-canvas"></canvas>
+      <div id="click-prompt">
+        <h2>CLICK TO ENGAGE</h2>
+        <p>Mouse + WASD</p>
+      </div>
+      <div id="messages"></div>
+    </div>
+    
+    <div id="sidebar">
+      <div class="panel" id="minimap-panel">
+        <div class="panel-title">TACTICAL MAP</div>
+        <canvas id="minimap-canvas"></canvas>
+      </div>
+      
+      <div class="panel">
+        <div class="panel-title">⚡ PERFORMANCE</div>
+        
+        <div class="perf-row">
+          <span>Frame Time</span>
+          <span class="perf-value" id="perf-frame">--</span>
+        </div>
+        <div class="perf-bar"><div class="perf-bar-fill" id="bar-frame"></div></div>
+        
+        <div class="perf-row">
+          <span>├ Update</span>
+          <span class="perf-value" id="perf-update">--</span>
+        </div>
+        <div class="perf-row">
+          <span>├ Visibility</span>
+          <span class="perf-value" id="perf-visibility">--</span>
+        </div>
+        <div class="perf-row">
+          <span>├ Render</span>
+          <span class="perf-value" id="perf-render">--</span>
+        </div>
+        <div class="perf-row">
+          <span>└ Minimap</span>
+          <span class="perf-value" id="perf-minimap">--</span>
+        </div>
+        
+        <div class="perf-row" style="margin-top: 6px;">
+          <span>Jitter (σ)</span>
+          <span class="perf-value" id="perf-jitter">--</span>
+        </div>
+        <div class="perf-row">
+          <span>Frame Budget</span>
+          <span class="perf-value" id="perf-budget">--</span>
+        </div>
+        
+        <div id="perf-graph">
+          <canvas id="graph-canvas"></canvas>
+          <span class="graph-label fps60">60</span>
+          <span class="graph-label fps30">30</span>
+        </div>
+      </div>
+      
+      <div class="panel">
+        <div class="panel-title">🎛️ TUNING</div>
+        
+        <div class="slider-row">
+          <span>Ray Count</span>
+          <input type="range" id="tune-rays" min="100" max="400" value="280">
+          <span class="slider-value" id="tune-rays-val">280</span>
+        </div>
+        
+        <div class="slider-row">
+          <span>Tex Detail</span>
+          <input type="range" id="tune-texdetail" min="1" max="4" value="2">
+          <span class="slider-value" id="tune-texdetail-val">2</span>
+        </div>
+        
+        <div class="slider-row">
+          <span>View Dist</span>
+          <input type="range" id="tune-viewdist" min="8" max="20" value="14">
+          <span class="slider-value" id="tune-viewdist-val">14</span>
+        </div>
+        
+        <div class="slider-row">
+          <span>Tex Contrast</span>
+          <input type="range" id="tune-contrast" min="50" max="200" value="120">
+          <span class="slider-value" id="tune-contrast-val">120%</span>
+        </div>
+      </div>
+      
+      <div class="panel">
+        <div class="panel-title">CONTROLS</div>
+        <div class="control-row">
+          <span>Move</span>
+          <span><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span></span>
+        </div>
+        <div class="control-row">
+          <span>Look</span>
+          <span>Mouse / <span class="key">←</span><span class="key">→</span></span>
+        </div>
+        <div class="control-row">
+          <span>Run</span>
+          <span><span class="key">Shift</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================
+    // SECTOR ENGINE - TEXTURED + FULL PROFILER
+    // =========================================================
+    
+    // ============ PROFILER ============
+    class Profiler {
+      constructor() {
+        this.timings = {};
+        this.history = {};
+        this.maxHistory = 120;
+        this.frameHistory = [];
+      }
+      
+      start(name) {
+        this.timings[name] = performance.now();
+      }
+      
+      end(name) {
+        if (!this.timings[name]) return 0;
+        const duration = performance.now() - this.timings[name];
+        if (!this.history[name]) this.history[name] = [];
+        this.history[name].push(duration);
+        if (this.history[name].length > this.maxHistory) this.history[name].shift();
+        return duration;
+      }
+      
+      get(name) {
+        const h = this.history[name];
+        return h && h.length > 0 ? h[h.length - 1] : 0;
+      }
+      
+      getAvg(name) {
+        const h = this.history[name];
+        if (!h || h.length === 0) return 0;
+        return h.reduce((a, b) => a + b, 0) / h.length;
+      }
+      
+      getJitter(name) {
+        const h = this.history[name];
+        if (!h || h.length < 2) return 0;
+        const avg = this.getAvg(name);
+        const variance = h.reduce((sum, v) => sum + Math.pow(v - avg, 2), 0) / h.length;
+        return Math.sqrt(variance);
+      }
+      
+      getHistory(name) {
+        return this.history[name] || [];
+      }
+      
+      recordFrame(ms) {
+        this.frameHistory.push(ms);
+        if (this.frameHistory.length > this.maxHistory) this.frameHistory.shift();
+      }
+    }
+    
+    const profiler = new Profiler();
+    
+    // ============ TEXTURE GENERATOR (HIGHER CONTRAST) ============
+    class TextureGenerator {
+      constructor(size = 64) {
+        this.size = size;
+        this.textures = new Map();
+        this.canvas = document.createElement('canvas');
+        this.canvas.width = size;
+        this.canvas.height = size;
+        this.ctx = this.canvas.getContext('2d');
+        this.contrast = 1.2; // Adjustable
+      }
+      
+      setContrast(c) {
+        this.contrast = c;
+      }
+      
+      _noise(x, y, seed = 0) {
+        const n = Math.sin(x * 12.9898 + y * 78.233 + seed) * 43758.5453;
+        return n - Math.floor(n);
+      }
+      
+      _fbm(x, y, octaves = 4, seed = 0) {
+        let value = 0, amp = 0.5, freq = 1;
+        for (let i = 0; i < octaves; i++) {
+          value += amp * this._noise(x * freq, y * freq, seed + i * 100);
+          amp *= 0.5; freq *= 2;
+        }
+        return value;
+      }
+      
+      _applyContrast(value, base) {
+        return base + (value - base) * this.contrast;
+      }
+      
+      // Metal panels - MORE VISIBLE
+      generateMetalPanels(baseColor, seed = 0) {
+        const ctx = this.ctx, size = this.size;
+        const [br, bg, bb] = baseColor;
+        
+        ctx.fillStyle = `rgb(${br}, ${bg}, ${bb})`;
+        ctx.fillRect(0, 0, size, size);
+        
+        const imageData = ctx.getImageData(0, 0, size, size);
+        const data = imageData.data;
+        
+        for (let y = 0; y < size; y++) {
+          for (let x = 0; x < size; x++) {
+            const i = (y * size + x) * 4;
+            
+            // Panel grid - THICKER LINES
+            const gridX = x % 16 < 2;
+            const gridY = y % 16 < 2;
+            const isGrid = gridX || gridY;
+            
+            // Rivets - BIGGER
+            const rivetX = (x % 16 >= 6 && x % 16 <= 9);
+            const rivetY = (y % 16 <= 2 || y % 16 >= 13);
+            const isRivet = rivetX && rivetY;
+            
+            // Panel highlight (top-left of each panel)
+            const panelX = x % 16;
+            const panelY = y % 16;
+            const isHighlight = panelX >= 2 && panelX <= 4 && panelY >= 2 && panelY <= 4;
+            
+            // Noise
+            const noise = this._fbm(x / 6, y / 6, 3, seed) * 40 - 20;
+            
+            let r = br + noise;
+            let g = bg + noise;
+            let b = bb + noise;
+            
+            if (isGrid) {
+              r -= 45; g -= 45; b -= 40;
+            } else if (isHighlight) {
+              r += 35; g += 35; b += 40;
+            }
+            
+            if (isRivet) {
+              r += 50; g += 50; b += 60;
+            }
+            
+            // Apply contrast
+            r = this._applyContrast(r, br);
+            g = this._applyContrast(g, bg);
+            b = this._applyContrast(b, bb);
+            
+            data[i] = Math.max(0, Math.min(255, r));
+            data[i + 1] = Math.max(0, Math.min(255, g));
+            data[i + 2] = Math.max(0, Math.min(255, b));
+          }
+        }
+        
+        ctx.putImageData(imageData, 0, 0);
+        return ctx.getImageData(0, 0, size, size);
+      }
+      
+      // Tech wall - GLOWING CIRCUITS
+      generateTechWall(baseColor, seed = 0) {
+        const ctx = this.ctx, size = this.size;
+        const [br, bg, bb] = baseColor;
+        
+        ctx.fillStyle = `rgb(${br * 0.6}, ${bg * 0.6}, ${bb * 0.6})`;
+        ctx.fillRect(0, 0, size, size);
+        
+        const imageData = ctx.getImageData(0, 0, size, size);
+        const data = imageData.data;
+        
+        for (let y = 0; y < size; y++) {
+          for (let x = 0; x < size; x++) {
+            const i = (y * size + x) * 4;
+            
+            // Circuit grid
+            const lineH = y % 10 === 0 || y % 10 === 1;
+            const lineV = x % 14 === 0 || x % 14 === 1;
+            
+            // Nodes at intersections
+            const nodeX = x % 14 < 4;
+            const nodeY = y % 10 < 4;
+            const isNode = nodeX && nodeY;
+            
+            // Glowing traces - random but consistent
+            const traceH = y % 10 === 5 && this._noise(Math.floor(x / 7), y, seed) > 0.4;
+            const traceV = x % 14 === 7 && this._noise(x, Math.floor(y / 5), seed + 50) > 0.4;
+            
+            let r = data[i], g = data[i + 1], b = data[i + 2];
+            
+            if (lineH || lineV) {
+              r += 30; g += 35; b += 45;
+            }
+            
+            if (isNode) {
+              // Blue-green glow
+              g += 60; b += 80;
+            }
+            
+            if (traceH || traceV) {
+              // Bright cyan trace
+              r += 20; g += 80; b += 100;
+            }
+            
+            // Subtle noise
+            const noise = this._noise(x, y, seed) * 15 - 7;
+            r += noise; g += noise; b += noise;
+            
+            data[i] = Math.max(0, Math.min(255, this._applyContrast(r, br * 0.6)));
+            data[i + 1] = Math.max(0, Math.min(255, this._applyContrast(g, bg * 0.6)));
+            data[i + 2] = Math.max(0, Math.min(255, this._applyContrast(b, bb * 0.6)));
+          }
+        }
+        
+        ctx.putImageData(imageData, 0, 0);
+        return ctx.getImageData(0, 0, size, size);
+      }
+      
+      // Concrete - MORE GRITTY
+      generateConcrete(baseColor, seed = 0) {
+        const ctx = this.ctx, size = this.size;
+        const [br, bg, bb] = baseColor;
+        
+        ctx.fillStyle = `rgb(${br}, ${bg}, ${bb})`;
+        ctx.fillRect(0, 0, size, size);
+        
+        const imageData = ctx.getImageData(0, 0, size, size);
+        const data = imageData.data;
+        
+        for (let y = 0; y < size; y++) {
+          for (let x = 0; x < size; x++) {
+            const i = (y * size + x) * 4;
+            
+            const noise1 = this._fbm(x / 4, y / 4, 4, seed) * 60 - 30;
+            const noise2 = this._fbm(x / 12, y / 12, 2, seed + 100) * 30 - 15;
+            const cracks = this._noise(x / 3, y / 3, seed + 200) > 0.92 ? -40 : 0;
+            
+            const total = noise1 + noise2 + cracks;
+            
+            data[i] = Math.max(0, Math.min(255, this._applyContrast(br + total, br)));
+            data[i + 1] = Math.max(0, Math.min(255, this._applyContrast(bg + total, bg)));
+            data[i + 2] = Math.max(0, Math.min(255, this._applyContrast(bb + total, bb)));
+          }
+        }
+        
+        ctx.putImageData(imageData, 0, 0);
+        return ctx.getImageData(0, 0, size, size);
+      }
+      
+      // Grating - CLEAR DIAMOND PATTERN
+      generateGrating(baseColor, seed = 0) {
+        const ctx = this.ctx, size = this.size;
+        const [br, bg, bb] = baseColor;
+        
+        // Very dark base (the holes)
+        ctx.fillStyle = `rgb(15, 18, 22)`;
+        ctx.fillRect(0, 0, size, size);
+        
+        const imageData = ctx.getImageData(0, 0, size, size);
+        const data = imageData.data;
+        
+        for (let y = 0; y < size; y++) {
+          for (let x = 0; x < size; x++) {
+            const i = (y * size + x) * 4;
+            
+            // Diamond hole pattern
+            const cellX = x % 8;
+            const cellY = y % 8;
+            const inDiamond = Math.abs(cellX - 3.5) + Math.abs(cellY - 3.5) < 3;
+            
+            if (!inDiamond) {
+              // Metal bar
+              const edge = Math.abs(cellX - 3.5) + Math.abs(cellY - 3.5) < 4;
+              const highlight = edge && (cellX < 3.5 || cellY < 3.5);
+              
+              data[i] = highlight ? br + 40 : br;
+              data[i + 1] = highlight ? bg + 40 : bg;
+              data[i + 2] = highlight ? bb + 50 : bb;
+            }
+            
+            // Add noise to metal parts only
+            if (!inDiamond) {
+              const noise = this._noise(x, y, seed) * 20 - 10;
+              data[i] = Math.max(0, Math.min(255, data[i] + noise));
+              data[i + 1] = Math.max(0, Math.min(255, data[i + 1] + noise));
+              data[i + 2] = Math.max(0, Math.min(255, data[i + 2] + noise));
+            }
+          }
+        }
+        
+        ctx.putImageData(imageData, 0, 0);
+        return ctx.getImageData(0, 0, size, size);
+      }
+      
+      // Brick - CLEAR PATTERN
+      generateBrick(baseColor, seed = 0) {
+        const ctx = this.ctx, size = this.size;
+        const [br, bg, bb] = baseColor;
+        
+        const imageData = ctx.createImageData(size, size);
+        const data = imageData.data;
+        
+        const brickH = 8, brickW = 16;
+        
+        for (let y = 0; y < size; y++) {
+          for (let x = 0; x < size; x++) {
+            const i = (y * size + x) * 4;
+            
+            const row = Math.floor(y / brickH);
+            const offsetX = (row % 2) * (brickW / 2);
+            const brickX = (x + offsetX) % brickW;
+            const brickY = y % brickH;
+            
+            // Mortar - WIDER
+            const isMortar = brickX < 2 || brickY < 2;
+            
+            if (isMortar) {
+              // Gray mortar
+              const mortarNoise = this._noise(x, y, seed) * 20;
+              data[i] = 60 + mortarNoise;
+              data[i + 1] = 58 + mortarNoise;
+              data[i + 2] = 55 + mortarNoise;
+            } else {
+              // Brick with variation per brick
+              const brickId = Math.floor((x + offsetX) / brickW) + row * 1000;
+              const brickVar = (this._noise(brickId, 0, seed) - 0.5) * 50;
+              const surfaceNoise = this._noise(x * 2, y * 2, seed + 300) * 25 - 12;
+              
+              data[i] = Math.max(0, Math.min(255, br + brickVar + surfaceNoise));
+              data[i + 1] = Math.max(0, Math.min(255, bg + brickVar * 0.8 + surfaceNoise));
+              data[i + 2] = Math.max(0, Math.min(255, bb + brickVar * 0.6 + surfaceNoise));
+            }
+            
+            data[i + 3] = 255;
+          }
+        }
+        
+        ctx.putImageData(imageData, 0, 0);
+        return ctx.getImageData(0, 0, size, size);
+      }
+      
+      // Crate - CLEAR WOOD WITH FRAME
+      generateCrate(baseColor, seed = 0) {
+        const ctx = this.ctx, size = this.size;
+        const [br, bg, bb] = baseColor;
+        
+        const imageData = ctx.createImageData(size, size);
+        const data = imageData.data;
+        
+        for (let y = 0; y < size; y++) {
+          for (let x = 0; x < size; x++) {
+            const i = (y * size + x) * 4;
+            
+            // Wood grain
+            const grain = Math.sin(y * 0.6 + this._noise(x / 15, y / 4, seed) * 8) * 20;
+            
+            // Frame border (thick)
+            const border = x < 6 || x >= size - 6 || y < 6 || y >= size - 6;
+            const innerBorder = x >= 6 && x < 10 || x >= size - 10 && x < size - 6 ||
+                               y >= 6 && y < 10 || y >= size - 10 && y < size - 6;
+            
+            // Cross braces
+            const diag1 = Math.abs((x - size/2) - (y - size/2)) < 4;
+            const diag2 = Math.abs((x - size/2) + (y - size/2)) < 4;
+            const crossBrace = (diag1 || diag2) && !border;
+            
+            // Plank lines
+            const plankLine = y % 12 < 1;
+            
+            let r = br + grain;
+            let g = bg + grain * 0.9;
+            let b = bb + grain * 0.7;
+            
+            if (border) {
+              r += 35; g += 30; b += 20;
+            }
+            if (innerBorder && border) {
+              r -= 25; g -= 22; b -= 18;
+            }
+            if (crossBrace) {
+              r += 30; g += 25; b += 18;
+            }
+            if (plankLine && !border) {
+              r -= 30; g -= 28; b -= 22;
+            }
+            
+            // Surface noise
+            const noise = this._noise(x, y, seed) * 18 - 9;
+            r += noise; g += noise * 0.9; b += noise * 0.7;
+            
+            data[i] = Math.max(0, Math.min(255, r));
+            data[i + 1] = Math.max(0, Math.min(255, g));
+            data[i + 2] = Math.max(0, Math.min(255, b));
+            data[i + 3] = 255;
+          }
+        }
+        
+        ctx.putImageData(imageData, 0, 0);
+        return ctx.getImageData(0, 0, size, size);
+      }
+      
+      // Pillar - smooth with subtle detail
+      generatePillar(baseColor, seed = 0) {
+        const ctx = this.ctx, size = this.size;
+        const [br, bg, bb] = baseColor;
+        
+        ctx.fillStyle = `rgb(${br}, ${bg}, ${bb})`;
+        ctx.fillRect(0, 0, size, size);
+        
+        const imageData = ctx.getImageData(0, 0, size, size);
+        const data = imageData.data;
+        
+        for (let y = 0; y < size; y++) {
+          for (let x = 0; x < size; x++) {
+            const i = (y * size + x) * 4;
+            
+            // Vertical streaks
+            const streak = this._noise(x / 4, 0, seed) * 25 - 12;
+            
+            // Subtle surface noise
+            const noise = this._fbm(x / 8, y / 8, 3, seed + 100) * 20 - 10;
+            
+            // Horizontal band
+            const band = (y % 32 < 2) ? -20 : 0;
+            
+            const total = streak + noise + band;
+            
+            data[i] = Math.max(0, Math.min(255, br + total));
+            data[i + 1] = Math.max(0, Math.min(255, bg + total));
+            data[i + 2] = Math.max(0, Math.min(255, bb + total));
+          }
+        }
+        
+        ctx.putImageData(imageData, 0, 0);
+        return ctx.getImageData(0, 0, size, size);
+      }
+      
+      sampleTexture(textureData, u, v) {
+        const size = this.size;
+        u = ((u % 1) + 1) % 1;
+        v = ((v % 1) + 1) % 1;
+        const x = Math.floor(u * size);
+        const y = Math.floor(v * size);
+        const idx = (y * size + x) * 4;
+        return [textureData.data[idx], textureData.data[idx + 1], textureData.data[idx + 2]];
+      }
+    }
+    
+    // ============ ENGINE CORE ============
+    class World {
+      constructor(config = {}) {
+        this.width = config.width || 32;
+        this.height = config.height || 32;
+        this.grid = Array(this.height).fill(null).map(() => Array(this.width).fill('void'));
+        this.sectorTypes = new Map();
+        this.sectorTypes.set('void', {
+          floor: -10, ceiling: -10, walkable: false,
+          floorColor: [20, 20, 25], wallColor: [40, 40, 50], name: 'VOID'
+        });
+      }
+      
+      registerSectorTypes(types) {
+        for (const [k, v] of Object.entries(types)) this.sectorTypes.set(k, v);
+      }
+      
+      getSector(x, y) {
+        const gx = Math.floor(x), gy = Math.floor(y);
+        if (gx < 0 || gx >= this.width || gy < 0 || gy >= this.height) return this.sectorTypes.get('void');
+        return this.sectorTypes.get(this.grid[gy][gx]) || this.sectorTypes.get('void');
+      }
+      
+      fillRect(x1, y1, x2, y2, type) {
+        for (let y = Math.min(y1,y2); y <= Math.max(y1,y2); y++)
+          for (let x = Math.min(x1,x2); x <= Math.max(x1,x2); x++)
+            if (x >= 0 && x < this.width && y >= 0 && y < this.height) this.grid[y][x] = type;
+      }
+      
+      countWalkable() {
+        let c = 0;
+        for (let y = 0; y < this.height; y++)
+          for (let x = 0; x < this.width; x++)
+            if (this.getSector(x, y).walkable) c++;
+        return c;
+      }
+    }
+    
+    class Visibility {
+      constructor(world, config = {}) {
+        this.world = world;
+        this.viewDistance = config.viewDistance || 14;
+        this.discovered = new Set();
+        this.currentlyVisible = new Set();
+        this.totalWalkable = world.countWalkable();
+        this.lastCell = null;
+      }
+      
+      update(x, y) {
+        const cell = `${Math.floor(x)},${Math.floor(y)}`;
+        if (cell === this.lastCell) return false;
+        this.lastCell = cell;
+        
+        profiler.start('visibility');
+        this.currentlyVisible.clear();
+        
+        for (let i = 0; i < 180; i++) {
+          const angle = (i / 180) * Math.PI * 2;
+          let rx = x, ry = y;
+          const dx = Math.cos(angle) * 0.4, dy = Math.sin(angle) * 0.4;
+          
+          for (let d = 0; d < this.viewDistance; d += 0.4) {
+            rx += dx; ry += dy;
+            const key = `${Math.floor(rx)},${Math.floor(ry)}`;
+            this.currentlyVisible.add(key);
+            const sector = this.world.getSector(rx, ry);
+            if (sector.walkable) this.discovered.add(key);
+            if (!sector.walkable) break;
+          }
+        }
+        profiler.end('visibility');
+        return true;
+      }
+      
+      isVisible(gx, gy) { return this.currentlyVisible.has(`${gx},${gy}`); }
+      isDiscovered(gx, gy) { return this.discovered.has(`${gx},${gy}`); }
+      
+      getDiscoveryPercent() {
+        let c = 0;
+        for (const k of this.discovered) {
+          const [x, y] = k.split(',').map(Number);
+          if (this.world.getSector(x, y).walkable) c++;
+        }
+        return Math.round((c / this.totalWalkable) * 100);
+      }
+    }
+    
+    class Movement {
+      constructor(world) { this.world = world; }
+      move(entity, dx, dy) {
+        const r = entity.radius || 0.2;
+        const nx = entity.x + dx, ny = entity.y + dy;
+        if (this._can(nx, ny, r)) return { x: nx, y: ny };
+        if (this._can(nx, entity.y, r)) return { x: nx, y: entity.y };
+        if (this._can(entity.x, ny, r)) return { x: entity.x, y: ny };
+        return { x: entity.x, y: entity.y };
+      }
+      _can(x, y, r) {
+        for (const [px, py] of [[x,y], [x-r,y-r], [x+r,y-r], [x-r,y+r], [x+r,y+r]])
+          if (!this.world.getSector(px, py).walkable) return false;
+        return true;
+      }
+    }
+    
+    class Input {
+      constructor() { this.keys = {}; this.mouseDX = 0; this.locked = false; }
+      init(target) {
+        window.addEventListener('keydown', e => { this.keys[e.code] = true; if (['KeyW','KeyA','KeyS','KeyD','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault(); });
+        window.addEventListener('keyup', e => this.keys[e.code] = false);
+        document.addEventListener('mousemove', e => { if (this.locked) this.mouseDX += e.movementX; });
+        document.addEventListener('pointerlockchange', () => {
+          this.locked = document.pointerLockElement === target;
+          document.getElementById('click-prompt').classList.toggle('hidden', this.locked);
+        });
+        target.addEventListener('click', () => { if (!this.locked) target.requestPointerLock(); });
+      }
+      getMovement(dt, speed) {
+        let f = 0, s = 0, t = 0;
+        if (this.keys['KeyW'] || this.keys['ArrowUp']) f += speed;
+        if (this.keys['KeyS'] || this.keys['ArrowDown']) f -= speed;
+        if (this.keys['KeyA']) s -= speed;
+        if (this.keys['KeyD']) s += speed;
+        if (this.keys['ArrowLeft']) t -= 2.2 * dt;
+        if (this.keys['ArrowRight']) t += 2.2 * dt;
+        if (this.keys['ShiftLeft'] || this.keys['ShiftRight']) { f *= 1.7; s *= 1.7; }
+        t += this.mouseDX * 0.002;
+        this.mouseDX = 0;
+        return { forward: f, strafe: s, turn: t };
+      }
+    }
+    
+    // ============ TEXTURED RENDERER ============
+    class TexturedRenderer {
+      constructor(config = {}) {
+        this.rayCount = config.rayCount || 280;
+        this.fov = config.fov || Math.PI * 0.6;
+        this.maxDepth = config.maxDepth || 18;
+        this.ambient = 0.3;
+        this.texDetail = 2; // 1 = per-column, 2+ = per-N-pixels
+        this.texGen = new TextureGenerator(64);
+        this.textureCache = new Map();
+      }
+      
+      init(canvas) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+        this._generateTextures();
+      }
+      
+      resize() {
+        const c = this.canvas.parentElement;
+        this.width = c.clientWidth;
+        this.height = c.clientHeight;
+        this.canvas.width = this.width;
+        this.canvas.height = this.height;
+      }
+      
+      setRayCount(n) { this.rayCount = n; }
+      setTexDetail(d) { this.texDetail = d; }
+      setViewDist(d) { this.maxDepth = d; }
+      setContrast(c) { this.texGen.contrast = c / 100; this._generateTextures(); }
+      
+      _generateTextures() {
+        this.textureCache.set('metal', this.texGen.generateMetalPanels([120, 125, 135], 42));
+        this.textureCache.set('metal_gold', this.texGen.generateMetalPanels([150, 135, 95], 43));
+        this.textureCache.set('tech', this.texGen.generateTechWall([70, 85, 110], 44));
+        this.textureCache.set('concrete', this.texGen.generateConcrete([100, 100, 105], 45));
+        this.textureCache.set('concrete_green', this.texGen.generateConcrete([85, 110, 90], 46));
+        this.textureCache.set('brick', this.texGen.generateBrick([145, 95, 75], 47));
+        this.textureCache.set('grating', this.texGen.generateGrating([110, 115, 125], 48));
+        this.textureCache.set('crate', this.texGen.generateCrate([160, 130, 85], 49));
+        this.textureCache.set('pillar', this.texGen.generatePillar([150, 148, 145], 50));
+      }
+      
+      _getTexture(sector) {
+        const map = {
+          'HANGAR': 'metal', 'PLATFORM': 'metal_gold', 'CORRIDOR': 'grating',
+          'OPS CENTER': 'concrete_green', 'TERMINAL BAY': 'tech', 'EXTERIOR': 'brick',
+          'PILLAR': 'pillar', 'CRATE': 'crate'
+        };
+        return this.textureCache.get(map[sector.name] || 'concrete');
+      }
+      
+      render(world, visibility, px, py, angle) {
+        profiler.start('render');
+        const ctx = this.ctx, w = this.width, h = this.height;
+        
+        // Sky
+        const sky = ctx.createLinearGradient(0, 0, 0, h * 0.5);
+        sky.addColorStop(0, '#0f1218');
+        sky.addColorStop(1, '#1f242f');
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, w, h * 0.5);
+        
+        // Floor
+        const floor = ctx.createLinearGradient(0, h * 0.5, 0, h);
+        floor.addColorStop(0, '#2a2d35');
+        floor.addColorStop(1, '#101215');
+        ctx.fillStyle = floor;
+        ctx.fillRect(0, h * 0.5, w, h * 0.5);
+        
+        // Rays
+        const colW = Math.ceil(w / this.rayCount);
+        for (let i = 0; i < this.rayCount; i++) {
+          const rayAngle = angle + ((i / this.rayCount) - 0.5) * this.fov;
+          this._castRay(ctx, world, visibility, px, py, angle, rayAngle, i, colW, w, h);
+        }
+        
+        // Vignette
+        const vig = ctx.createRadialGradient(w/2, h/2, h*0.2, w/2, h/2, h*0.9);
+        vig.addColorStop(0, 'rgba(0,0,0,0)');
+        vig.addColorStop(1, 'rgba(0,0,0,0.6)');
+        ctx.fillStyle = vig;
+        ctx.fillRect(0, 0, w, h);
+        
+        // Crosshair
+        ctx.strokeStyle = 'rgba(51,255,51,0.7)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(w/2 - 12, h/2); ctx.lineTo(w/2 - 5, h/2);
+        ctx.moveTo(w/2 + 5, h/2); ctx.lineTo(w/2 + 12, h/2);
+        ctx.moveTo(w/2, h/2 - 12); ctx.lineTo(w/2, h/2 - 5);
+        ctx.moveTo(w/2, h/2 + 5); ctx.lineTo(w/2, h/2 + 12);
+        ctx.stroke();
+        
+        profiler.end('render');
+      }
+      
+      _castRay(ctx, world, vis, px, py, viewAngle, rayAngle, col, colW, w, h) {
+        const step = 0.02;
+        const cosA = Math.cos(rayAngle), sinA = Math.sin(rayAngle);
+        const cosCorr = Math.cos(rayAngle - viewAngle);
+        let x = px, y = py, dist = 0;
+        
+        while (dist < this.maxDepth) {
+          x += cosA * step; y += sinA * step; dist += step;
+          
+          const gx = Math.floor(x), gy = Math.floor(y);
+          const sector = world.getSector(x, y);
+          
+          if (!sector.walkable) {
+            const visible = vis.isVisible(gx, gy);
+            const discovered = vis.isDiscovered(gx, gy);
+            if (!visible && !discovered) return;
+            
+            const corrDist = dist * cosCorr;
+            const wallH = Math.min(h * 2, (h * 0.9) / corrDist);
+            const wallTop = (h - wallH) / 2;
+            
+            // UV calculation
+            const hitX = x - gx, hitY = y - gy;
+            let texU;
+            let isNS;
+            if (hitX < 0.03 || hitX > 0.97) { texU = hitY; isNS = true; }
+            else { texU = hitX; isNS = false; }
+            
+            const texture = this._getTexture(sector);
+            const detail = this.texDetail;
+            
+            // Draw wall column with texture
+            const startY = Math.max(0, Math.floor(wallTop));
+            const endY = Math.min(h, Math.ceil(wallTop + wallH));
+            
+            for (let screenY = startY; screenY < endY; screenY += detail) {
+              const texV = (screenY - wallTop) / wallH;
+              let [r, g, b] = this.texGen.sampleTexture(texture, texU, texV);
+              
+              // Side shading
+              if (isNS) { r *= 0.75; g *= 0.75; b *= 0.75; }
+              
+              // Distance shading
+              const shade = Math.max(this.ambient, 1 - corrDist * 0.06);
+              r *= shade; g *= shade; b *= shade;
+              
+              // Fog
+              const fog = Math.max(0, Math.min(1, (corrDist - 6) * 0.08));
+              r = r * (1 - fog) + 18 * fog;
+              g = g * (1 - fog) + 22 * fog;
+              b = b * (1 - fog) + 28 * fog;
+              
+              // Desaturate if not currently visible
+              if (!visible && discovered) {
+                const lum = (r + g + b) / 3;
+                r = lum * 0.5; g = lum * 0.5; b = lum * 0.55;
+              }
+              
+              ctx.fillStyle = `rgb(${r|0},${g|0},${b|0})`;
+              ctx.fillRect(col * colW, screenY, colW + 1, detail);
+            }
+            return;
+          }
+        }
+      }
+    }
+    
+    // ============ MINIMAP ============
+    class Minimap {
+      constructor(cfg = {}) { this.fov = cfg.fov || Math.PI * 0.6; this.viewDist = cfg.viewDistance || 14; }
+      init(canvas) {
+        this.canvas = canvas; this.ctx = canvas.getContext('2d');
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+      }
+      resize() {
+        const c = this.canvas.parentElement;
+        const size = Math.min(c.clientWidth - 16, c.clientHeight - 32);
+        this.canvas.width = size; this.canvas.height = size;
+      }
+      render(world, vis, px, py, angle) {
+        profiler.start('minimap');
+        const ctx = this.ctx, w = this.canvas.width, h = this.canvas.height;
+        const cw = w / world.width, ch = h / world.height;
+        
+        ctx.fillStyle = '#030305';
+        ctx.fillRect(0, 0, w, h);
+        
+        for (let gy = 0; gy < world.height; gy++) {
+          for (let gx = 0; gx < world.width; gx++) {
+            const s = world.getSector(gx, gy);
+            const v = vis.isVisible(gx, gy), d = vis.isDiscovered(gx, gy);
+            let col;
+            if (!d && !v) col = '#050508';
+            else if (!s.walkable) col = v ? '#3a3a45' : '#1a1a22';
+            else if (v) { const c = s.floorColor; col = `rgb(${c[0]*0.75|0},${c[1]*0.75|0},${c[2]*0.75|0})`; }
+            else col = '#151518';
+            ctx.fillStyle = col;
+            ctx.fillRect(gx * cw, gy * ch, cw + 0.5, ch + 0.5);
+          }
+        }
+        
+        const mx = px * cw, my = py * ch, cl = this.viewDist * cw;
+        ctx.fillStyle = 'rgba(51,255,51,0.1)';
+        ctx.beginPath();
+        ctx.moveTo(mx, my);
+        ctx.lineTo(mx + Math.cos(angle - this.fov/2) * cl, my + Math.sin(angle - this.fov/2) * cl);
+        ctx.arc(mx, my, cl, angle - this.fov/2, angle + this.fov/2);
+        ctx.fill();
+        
+        ctx.fillStyle = '#33ff33';
+        ctx.shadowColor = '#33ff33'; ctx.shadowBlur = 5;
+        ctx.beginPath(); ctx.arc(mx, my, 3, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowBlur = 0;
+        
+        ctx.strokeStyle = '#33ff33'; ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(mx, my);
+        ctx.lineTo(mx + Math.cos(angle) * 8, my + Math.sin(angle) * 8);
+        ctx.stroke();
+        
+        profiler.end('minimap');
+      }
+    }
+    
+    // ============ LEVEL DATA ============
+    const SECTOR_TYPES = {
+      hangar: { floor: 0, ceiling: 1.4, floorColor: [80, 82, 88], wallColor: [110, 115, 125], walkable: true, name: 'HANGAR' },
+      hangar_platform: { floor: 0.2, ceiling: 1.4, floorColor: [120, 110, 85], wallColor: [140, 130, 100], walkable: true, name: 'PLATFORM' },
+      corridor: { floor: 0, ceiling: 1.1, floorColor: [75, 78, 85], wallColor: [100, 105, 115], walkable: true, name: 'CORRIDOR' },
+      zigzag: { floor: 0.05, ceiling: 1.5, floorColor: [70, 90, 78], wallColor: [95, 120, 105], walkable: true, name: 'OPS CENTER' },
+      computer: { floor: 0.1, ceiling: 1.2, floorColor: [75, 80, 100], wallColor: [100, 108, 130], walkable: true, name: 'TERMINAL BAY' },
+      outdoor: { floor: -0.1, ceiling: 4.0, floorColor: [100, 95, 80], wallColor: [130, 125, 110], walkable: true, name: 'EXTERIOR' },
+      pillar: { floor: 0, ceiling: 1.5, floorColor: [130, 125, 118], wallColor: [150, 145, 138], walkable: false, name: 'PILLAR' },
+      crate: { floor: 0.5, ceiling: 1.2, floorColor: [130, 105, 70], wallColor: [150, 125, 85], walkable: false, name: 'CRATE' }
+    };
+    
+    const REGIONS = [
+      { type: 'hangar', x1: 1, y1: 9, x2: 7, y2: 15 },
+      { type: 'hangar_platform', x1: 4, y1: 11, x2: 6, y2: 13 },
+      { type: 'corridor', x1: 7, y1: 11, x2: 11, y2: 13 },
+      { type: 'corridor', x1: 17, y1: 11, x2: 19, y2: 13 },
+      { type: 'zigzag', x1: 11, y1: 7, x2: 17, y2: 17 },
+      { type: 'pillar', x1: 13, y1: 9, x2: 13, y2: 9 },
+      { type: 'pillar', x1: 15, y1: 9, x2: 15, y2: 9 },
+      { type: 'pillar', x1: 13, y1: 15, x2: 13, y2: 15 },
+      { type: 'pillar', x1: 15, y1: 15, x2: 15, y2: 15 },
+      { type: 'computer', x1: 19, y1: 9, x2: 23, y2: 15 },
+      { type: 'crate', x1: 21, y1: 10, x2: 22, y2: 10 },
+      { type: 'crate', x1: 21, y1: 14, x2: 21, y2: 14 },
+      { type: 'outdoor', x1: 1, y1: 1, x2: 7, y2: 7 },
+      { type: 'hangar', x1: 3, y1: 8, x2: 5, y2: 8 }
+    ];
+    
+    // ============ SETUP ============
+    const world = new World({ width: 24, height: 24 });
+    world.registerSectorTypes(SECTOR_TYPES);
+    REGIONS.forEach(r => world.fillRect(r.x1, r.y1, r.x2, r.y2, r.type));
+    
+    const visibility = new Visibility(world, { viewDistance: 14 });
+    const movement = new Movement(world);
+    const input = new Input();
+    const renderer = new TexturedRenderer({ rayCount: 280 });
+    const minimap = new Minimap({ viewDistance: 14 });
+    const player = { x: 3.5, y: 12.5, angle: 0, radius: 0.2, speed: 3.0 };
+    
+    renderer.init(document.getElementById('game-canvas'));
+    minimap.init(document.getElementById('minimap-canvas'));
+    input.init(document.getElementById('viewport'));
+    visibility.update(player.x, player.y);
+    
+    // Perf graph
+    const graphCanvas = document.getElementById('graph-canvas');
+    const graphCtx = graphCanvas.getContext('2d');
+    
+    function drawPerfGraph() {
+      const w = graphCanvas.width = graphCanvas.parentElement.clientWidth;
+      const h = graphCanvas.height = 50;
+      const history = profiler.getHistory('frame');
+      
+      graphCtx.fillStyle = '#0a0a0c';
+      graphCtx.fillRect(0, 0, w, h);
+      
+      // 60fps line (16.67ms)
+      graphCtx.strokeStyle = '#1a3a1a';
+      graphCtx.beginPath();
+      graphCtx.moveTo(0, h - (16.67 / 50) * h);
+      graphCtx.lineTo(w, h - (16.67 / 50) * h);
+      graphCtx.stroke();
+      
+      // 30fps line (33.33ms)
+      graphCtx.strokeStyle = '#3a2a1a';
+      graphCtx.beginPath();
+      graphCtx.moveTo(0, h - (33.33 / 50) * h);
+      graphCtx.lineTo(w, h - (33.33 / 50) * h);
+      graphCtx.stroke();
+      
+      if (history.length < 2) return;
+      
+      graphCtx.strokeStyle = '#33ff33';
+      graphCtx.lineWidth = 1;
+      graphCtx.beginPath();
+      const step = w / (history.length - 1);
+      for (let i = 0; i < history.length; i++) {
+        const x = i * step;
+        const y = h - Math.min(1, history[i] / 50) * h;
+        if (i === 0) graphCtx.moveTo(x, y);
+        else graphCtx.lineTo(x, y);
+      }
+      graphCtx.stroke();
+    }
+    
+    // Tuning sliders
+    document.getElementById('tune-rays').addEventListener('input', e => {
+      renderer.setRayCount(parseInt(e.target.value));
+      document.getElementById('tune-rays-val').textContent = e.target.value;
+    });
+    document.getElementById('tune-texdetail').addEventListener('input', e => {
+      renderer.setTexDetail(parseInt(e.target.value));
+      document.getElementById('tune-texdetail-val').textContent = e.target.value;
+    });
+    document.getElementById('tune-viewdist').addEventListener('input', e => {
+      renderer.setViewDist(parseInt(e.target.value));
+      visibility.viewDistance = parseInt(e.target.value);
+      document.getElementById('tune-viewdist-val').textContent = e.target.value;
+    });
+    document.getElementById('tune-contrast').addEventListener('input', e => {
+      renderer.setContrast(parseInt(e.target.value));
+      document.getElementById('tune-contrast-val').textContent = e.target.value + '%';
+    });
+    
+    // UI updates
+    let lastTime = 0, frameCount = 0, fpsTime = 0, currentFPS = 0;
+    
+    function updatePerfUI() {
+      const frame = profiler.getAvg('frame');
+      const fps = frame > 0 ? 1000 / frame : 0;
+      
+      const fpsEl = document.getElementById('stat-fps');
+      fpsEl.textContent = fps.toFixed(0);
+      fpsEl.className = 'stat-value' + (fps >= 55 ? '' : fps >= 30 ? ' warn' : ' bad');
+      
+      document.getElementById('stat-frame').textContent = frame.toFixed(1) + 'ms';
+      document.getElementById('perf-frame').textContent = frame.toFixed(2) + 'ms';
+      document.getElementById('perf-update').textContent = profiler.getAvg('update').toFixed(2) + 'ms';
+      document.getElementById('perf-visibility').textContent = profiler.getAvg('visibility').toFixed(2) + 'ms';
+      document.getElementById('perf-render').textContent = profiler.getAvg('render').toFixed(2) + 'ms';
+      document.getElementById('perf-minimap').textContent = profiler.getAvg('minimap').toFixed(2) + 'ms';
+      
+      const jitter = profiler.getJitter('frame');
+      const jitterEl = document.getElementById('perf-jitter');
+      jitterEl.textContent = jitter.toFixed(2) + 'ms';
+      jitterEl.className = 'perf-value' + (jitter < 3 ? '' : jitter < 8 ? ' warn' : ' bad');
+      
+      const budget = ((16.67 - frame) / 16.67 * 100);
+      const budgetEl = document.getElementById('perf-budget');
+      budgetEl.textContent = (budget > 0 ? '+' : '') + budget.toFixed(0) + '%';
+      budgetEl.className = 'perf-value' + (budget > 10 ? '' : budget > 0 ? ' warn' : ' bad');
+      
+      // Frame time bar (target 16.67ms = 100%)
+      const barFill = document.getElementById('bar-frame');
+      const pct = Math.min(100, (frame / 33.33) * 100);
+      barFill.style.width = pct + '%';
+      barFill.className = 'perf-bar-fill' + (frame < 16.67 ? '' : frame < 33.33 ? ' warn' : ' bad');
+      
+      drawPerfGraph();
+    }
+    
+    function showMessage(text) {
+      const log = document.getElementById('messages');
+      const msg = document.createElement('div');
+      msg.className = 'message';
+      msg.textContent = text;
+      log.appendChild(msg);
+      setTimeout(() => msg.remove(), 2500);
+    }
+    
+    // Game loop
+    function gameLoop(time) {
+      profiler.start('frame');
+      
+      const dt = Math.min((time - lastTime) / 1000, 0.1);
+      lastTime = time;
+      
+      profiler.start('update');
+      const move = input.getMovement(dt, player.speed * dt);
+      player.angle += move.turn;
+      while (player.angle < 0) player.angle += Math.PI * 2;
+      while (player.angle >= Math.PI * 2) player.angle -= Math.PI * 2;
+      
+      const fx = Math.cos(player.angle), fy = Math.sin(player.angle);
+      const sx = Math.cos(player.angle + Math.PI/2), sy = Math.sin(player.angle + Math.PI/2);
+      const dx = fx * move.forward + sx * move.strafe;
+      const dy = fy * move.forward + sy * move.strafe;
+      
+      if (dx !== 0 || dy !== 0) {
+        const res = movement.move(player, dx, dy);
+        player.x = res.x; player.y = res.y;
+      }
+      profiler.end('update');
+      
+      visibility.update(player.x, player.y);
+      renderer.render(world, visibility, player.x, player.y, player.angle);
+      minimap.render(world, visibility, player.x, player.y, player.angle);
+      
+      profiler.end('frame');
+      profiler.recordFrame(profiler.get('frame'));
+      
+      // UI (throttled)
+      frameCount++;
+      fpsTime += dt;
+      if (fpsTime >= 0.15) {
+        document.getElementById('stat-explored').textContent = visibility.getDiscoveryPercent() + '%';
+        document.getElementById('stat-sector').textContent = world.getSector(player.x, player.y).name || '--';
+        updatePerfUI();
+        fpsTime = 0;
+      }
+      
+      requestAnimationFrame(gameLoop);
+    }
+    
+    showMessage('SECTOR ENGINE - Textured + Profiler');
+    showMessage('Use tuning sliders to adjust performance');
+    requestAnimationFrame(gameLoop);
+  </script>
+</body>
+</html>

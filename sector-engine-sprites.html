@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sector Engine - Sprites</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700&display=swap');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0a0a0c; color: #33ff33; font-family: 'Share Tech Mono', monospace; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
+    #header { background: linear-gradient(180deg, #1a1a1f 0%, #0d0d10 100%); border-bottom: 2px solid #33ff33; padding: 8px 16px; display: flex; justify-content: space-between; align-items: center; }
+    #header h1 { font-family: 'Orbitron', sans-serif; font-size: 1rem; letter-spacing: 3px; }
+    .tag { font-size: 0.5rem; color: #ff9933; margin-left: 8px; letter-spacing: 2px; background: rgba(255,153,51,0.15); padding: 2px 6px; border-radius: 3px; }
+    #stats { display: flex; gap: 16px; font-size: 0.7rem; }
+    .stat { display: flex; flex-direction: column; align-items: center; }
+    .stat-label { color: #555; font-size: 0.55rem; letter-spacing: 1px; }
+    .stat-value { color: #33ff33; } .stat-value.warn { color: #ffaa33; }
+    #main { flex: 1; display: flex; padding: 8px; min-height: 0; gap: 8px; }
+    #viewport { flex: 2; position: relative; border: 2px solid #1a1a1a; border-radius: 4px; overflow: hidden; background: #000; }
+    #game-canvas { width: 100%; height: 100%; display: block; }
+    #overlay-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+    #click-prompt { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.9); border: 1px solid #33ff33; padding: 14px 28px; text-align: center; cursor: pointer; z-index: 10; }
+    #click-prompt:hover { background: rgba(51,255,51,0.1); }
+    #click-prompt.hidden { display: none; }
+    #click-prompt h2 { font-family: 'Orbitron', sans-serif; font-size: 0.85rem; letter-spacing: 2px; }
+    #sidebar { width: 280px; display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
+    .panel { background: #0f0f12; border: 1px solid #222; border-radius: 4px; padding: 8px; }
+    .panel-title { font-family: 'Orbitron', sans-serif; font-size: 0.6rem; letter-spacing: 2px; color: #444; margin-bottom: 6px; }
+    #minimap-panel { height: 160px; display: flex; flex-direction: column; }
+    #minimap-canvas { flex: 1; width: 100%; border: 1px solid #1a1a1a; background: #030305; }
+    .perf-row { display: flex; justify-content: space-between; font-size: 0.65rem; color: #666; margin-bottom: 3px; }
+    .perf-value { color: #33ff33; min-width: 55px; text-align: right; }
+    .slider-row { display: flex; justify-content: space-between; align-items: center; font-size: 0.6rem; color: #888; margin-bottom: 4px; }
+    .slider-row input[type="range"] { width: 80px; }
+    .slider-value { color: #33ff33; min-width: 35px; text-align: right; }
+    .control-row { display: flex; justify-content: space-between; font-size: 0.6rem; color: #888; margin-bottom: 3px; }
+    .key { background: #1a1a1f; border: 1px solid #2a2a2a; padding: 1px 4px; border-radius: 2px; color: #33ff33; font-size: 0.55rem; }
+    .light-indicator { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+    #messages { position: absolute; bottom: 10px; left: 10px; max-width: 300px; z-index: 5; }
+    .message { background: rgba(0,0,0,0.85); border-left: 2px solid #33ff33; padding: 4px 8px; margin-bottom: 2px; font-size: 0.7rem; animation: msgIn 0.2s ease-out, msgOut 0.3s ease-in 3s forwards; }
+    @keyframes msgIn { from { opacity: 0; transform: translateX(-10px); } }
+    @keyframes msgOut { to { opacity: 0; } }
+    #audio-status { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.7); padding: 4px 8px; border-radius: 4px; font-size: 0.6rem; }
+  </style>
+</head>
+<body>
+  <div id="header">
+    <h1>SECTOR ENGINE <span class="tag">SPRITES</span></h1>
+    <div id="stats">
+      <div class="stat"><span class="stat-label">FPS</span><span class="stat-value" id="stat-fps">--</span></div>
+      <div class="stat"><span class="stat-label">FRAME</span><span class="stat-value" id="stat-frame">--</span></div>
+      <div class="stat"><span class="stat-label">SPRITES</span><span class="stat-value" id="stat-sprites">--</span></div>
+      <div class="stat"><span class="stat-label">SECTOR</span><span class="stat-value" id="stat-sector">--</span></div>
+    </div>
+  </div>
+  <div id="main">
+    <div id="viewport">
+      <canvas id="game-canvas"></canvas>
+      <canvas id="overlay-canvas"></canvas>
+      <div id="click-prompt"><h2>CLICK TO ENGAGE</h2></div>
+      <div id="messages"></div>
+      <div id="audio-status">🔇 Click for audio</div>
+    </div>
+    <div id="sidebar">
+      <div class="panel" id="minimap-panel"><div class="panel-title">TACTICAL MAP</div><canvas id="minimap-canvas"></canvas></div>
+      <div class="panel">
+        <div class="panel-title">⚡ PERFORMANCE</div>
+        <div class="perf-row"><span>Frame Total</span><span class="perf-value" id="perf-frame">--</span></div>
+        <div class="perf-row"><span>├ Walls</span><span class="perf-value" id="perf-walls">--</span></div>
+        <div class="perf-row"><span>├ Floors</span><span class="perf-value" id="perf-floors">--</span></div>
+        <div class="perf-row"><span>├ Sprites</span><span class="perf-value" id="perf-sprites">--</span></div>
+        <div class="perf-row"><span>└ Lighting</span><span class="perf-value" id="perf-lighting">--</span></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">💡 LIGHTING</div>
+        <div id="light-list"></div>
+        <div class="slider-row"><span>Ambient</span><input type="range" id="tune-ambient" min="0" max="50" value="15"><span class="slider-value" id="tune-ambient-val">15%</span></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">🎛️ RENDER</div>
+        <div class="slider-row"><span>Rays</span><input type="range" id="tune-rays" min="200" max="640" value="400"><span class="slider-value" id="tune-rays-val">400</span></div>
+        <div class="slider-row"><span>View</span><input type="range" id="tune-viewdist" min="10" max="24" value="16"><span class="slider-value" id="tune-viewdist-val">16</span></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">CONTROLS</div>
+        <div class="control-row"><span>Move</span><span><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span></span></div>
+        <div class="control-row"><span>Look</span><span>Mouse</span></div>
+        <div class="control-row"><span>Run</span><span><span class="key">Shift</span></span></div>
+        <div class="control-row"><span>Light</span><span><span class="key">F</span></span></div>
+      </div>
+    </div>
+  </div>
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// SECTOR ENGINE - SPRITE SYSTEM (Hybrid CPU/GPU)
+// ═══════════════════════════════════════════════════════════════════════════
+
+class Profiler {
+  constructor() { this.t = {}; this.h = {}; }
+  start(n) { this.t[n] = performance.now(); }
+  end(n) { if (!this.t[n]) return; const d = performance.now() - this.t[n]; if (!this.h[n]) this.h[n] = []; this.h[n].push(d); if (this.h[n].length > 60) this.h[n].shift(); }
+  getAvg(n) { const h = this.h[n]; return h?.length ? h.reduce((a,b)=>a+b,0)/h.length : 0; }
+}
+const profiler = new Profiler();
+
+// ─── SPRITE SYSTEM ───
+class Sprite {
+  constructor(cfg) { this.x = cfg.x||0; this.y = cfg.y||0; this.texture = cfg.texture||0; this.scale = cfg.scale||1; this.type = cfg.type||'decoration'; this.active = true; this.screenX = 0; this.distance = 0; }
+}
+
+class SpriteManager {
+  constructor() { this.sprites = []; this.visible = []; }
+  add(cfg) { const s = new Sprite(cfg); this.sprites.push(s); return s; }
+  update(px, py, angle, fov, maxDist) {
+    const halfFov = fov/2, cosA = Math.cos(-angle), sinA = Math.sin(-angle);
+    this.visible = [];
+    for (const s of this.sprites) {
+      if (!s.active) continue;
+      const dx = s.x - px, dy = s.y - py;
+      const camY = dx * cosA - dy * sinA, camX = dx * sinA + dy * cosA;
+      if (camY <= 0.1 || camY > maxDist) continue;
+      if (Math.abs(Math.atan2(camX, camY)) > halfFov + 0.3) continue;
+      s.screenX = camX / camY; s.distance = camY;
+      this.visible.push(s);
+    }
+    this.visible.sort((a, b) => b.distance - a.distance);
+  }
+  getVisible() { return this.visible; }
+}
+
+// ─── SPRITE TEXTURE GENERATOR ───
+class SpriteTexGen {
+  constructor(s=64) { this.s = s; }
+  _n(x,y,seed=0) { const n = Math.sin(x*12.9898+y*78.233+seed)*43758.5453; return n-Math.floor(n); }
+  
+  barrel(seed=0) {
+    const s=this.s, d=new Uint8Array(s*s*4), cx=s/2, r=s*0.4;
+    for(let y=0;y<s;y++) for(let x=0;x<s;x++) {
+      const i=(y*s+x)*4, dx=x-cx, dist=Math.sqrt(dx*dx+(y-cx)*(y-cx));
+      if(dist>r) { d[i]=d[i+1]=d[i+2]=d[i+3]=0; continue; }
+      const shade=1-Math.abs(dx)/r*0.5, n=this._n(x,y,seed)*0.15;
+      const stripe=Math.floor(y/8)%2, inZone=y>s*0.25&&y<s*0.75;
+      let R,G,B;
+      if(stripe&&inZone) { R=220*shade; G=190*shade; B=30*shade; }
+      else { R=60*shade; G=95*shade; B=60*shade; }
+      if(this._n(x*2,y*2,seed+100)>0.85) { R=100; G=50; B=25; }
+      if(y<s*0.12||y>s*0.88) { R=70*shade; G=75*shade; B=80*shade; }
+      d[i]=Math.max(0,Math.min(255,R+(n-0.075)*40));
+      d[i+1]=Math.max(0,Math.min(255,G+(n-0.075)*40));
+      d[i+2]=Math.max(0,Math.min(255,B+(n-0.075)*40));
+      d[i+3]=255;
+    }
+    return d;
+  }
+  
+  crate(seed=0) {
+    const s=this.s, d=new Uint8Array(s*s*4), m=s*0.08;
+    for(let y=0;y<s;y++) for(let x=0;x<s;x++) {
+      const i=(y*s+x)*4;
+      if(x<m||x>s-m||y<m||y>s-m) { d[i]=d[i+1]=d[i+2]=d[i+3]=0; continue; }
+      const n=this._n(x,y,seed)*0.2, fw=s*0.1;
+      const isFrame=x<m+fw||x>s-m-fw||y<m+fw||y>s-m-fw;
+      const isBolt=(x<m+fw*2||x>s-m-fw*2)&&(y<m+fw*2||y>s-m-fw*2);
+      let R,G,B;
+      if(isBolt) { R=150+n*30; G=155+n*30; B=160+n*30; }
+      else if(isFrame) { R=50+n*20; G=55+n*20; B=65+n*20; }
+      else { R=180+n*30; G=140+n*25; B=80+n*20; if((x-m)%16<2||(y-m)%16<2) { R*=0.7; G*=0.7; B*=0.7; } }
+      d[i]=Math.max(0,Math.min(255,R)); d[i+1]=Math.max(0,Math.min(255,G)); d[i+2]=Math.max(0,Math.min(255,B)); d[i+3]=255;
+    }
+    return d;
+  }
+  
+  lamp(seed=0) {
+    const s=this.s, d=new Uint8Array(s*s*4), cx=s/2;
+    for(let y=0;y<s;y++) for(let x=0;x<s;x++) {
+      const i=(y*s+x)*4, dx=Math.abs(x-cx);
+      const pw=s*0.08, lw=s*0.25, lt=s*0.15, lb=s*0.4;
+      const inPost=dx<pw&&y>lb, inLamp=dx<lw&&y>=lt&&y<=lb, inBase=dx<s*0.15&&y>s*0.85;
+      if(!inPost&&!inLamp&&!inBase) { d[i]=d[i+1]=d[i+2]=d[i+3]=0; continue; }
+      let R,G,B;
+      if(inLamp) { const g=1-(y-lt)/(lb-lt)*0.3; R=255*g; G=240*g; B=200*g; }
+      else { const sh=0.6+this._n(x,y,seed)*0.2; R=50*sh; G=55*sh; B=60*sh; }
+      d[i]=Math.max(0,Math.min(255,R)); d[i+1]=Math.max(0,Math.min(255,G)); d[i+2]=Math.max(0,Math.min(255,B)); d[i+3]=255;
+    }
+    return d;
+  }
+  
+  terminal(seed=0) {
+    const s=this.s, d=new Uint8Array(s*s*4), m=s*0.15;
+    for(let y=0;y<s;y++) for(let x=0;x<s;x++) {
+      const i=(y*s+x)*4;
+      const w=m+(s-2*m)*0.3*(y/s), l=s/2-w, r=s/2+w;
+      if(x<l||x>r||y<m*0.5) { d[i]=d[i+1]=d[i+2]=d[i+3]=0; continue; }
+      const n=this._n(x,y,seed);
+      const st=s*0.15, sb=s*0.55, sm=s*0.22;
+      const inScreen=y>=st&&y<=sb&&x>l+sm*0.5&&x<r-sm*0.5;
+      let R,G,B;
+      if(inScreen) { const sc=Math.sin(y*0.8)*0.1+0.9; R=20*sc; G=180*sc+n*30; B=60*sc; if(n>0.9) G=255; }
+      else { const sh=0.7+n*0.15; R=70*sh; G=75*sh; B=80*sh; }
+      d[i]=Math.max(0,Math.min(255,R)); d[i+1]=Math.max(0,Math.min(255,G)); d[i+2]=Math.max(0,Math.min(255,B)); d[i+3]=255;
+    }
+    return d;
+  }
+  
+  column(seed=0) {
+    const s=this.s, d=new Uint8Array(s*s*4), cx=s/2, r=s*0.3;
+    for(let y=0;y<s;y++) for(let x=0;x<s;x++) {
+      const i=(y*s+x)*4, dx=Math.abs(x-cx);
+      if(dx>r) { d[i]=d[i+1]=d[i+2]=d[i+3]=0; continue; }
+      const shade=(1-dx/r*0.4), n=this._n(x,y,seed)*0.1, flute=Math.sin(x*0.5)*0.15+0.85;
+      let R=140*shade*flute, G=138*shade*flute, B=135*shade*flute;
+      if(y<s*0.1||y>s*0.9) { R*=0.8; G*=0.8; B*=0.8; }
+      d[i]=Math.max(0,Math.min(255,R+(n-0.05)*30));
+      d[i+1]=Math.max(0,Math.min(255,G+(n-0.05)*30));
+      d[i+2]=Math.max(0,Math.min(255,B+(n-0.05)*30));
+      d[i+3]=255;
+    }
+    return d;
+  }
+  
+  canister(seed=0) {
+    const s=this.s, d=new Uint8Array(s*s*4), cx=s/2, r=s*0.3;
+    for(let y=0;y<s;y++) for(let x=0;x<s;x++) {
+      const i=(y*s+x)*4, dx=Math.abs(x-cx);
+      if(dx>r) { d[i]=d[i+1]=d[i+2]=d[i+3]=0; continue; }
+      const shade=1-dx/r*0.4, n=this._n(x,y,seed)*0.15;
+      let R=180*shade, G=40*shade, B=35*shade;
+      if(y>s*0.4&&y<s*0.6) { const bp=Math.floor((x+y)/6)%2; if(bp) { R=230*shade; G=230*shade; B=230*shade; } }
+      if(y<s*0.15&&dx<r*0.4) { R=60*shade; G=65*shade; B=70*shade; }
+      d[i]=Math.max(0,Math.min(255,R+(n-0.075)*30));
+      d[i+1]=Math.max(0,Math.min(255,G+(n-0.075)*20));
+      d[i+2]=Math.max(0,Math.min(255,B+(n-0.075)*20));
+      d[i+3]=255;
+    }
+    return d;
+  }
+}
+
+// ─── LIGHTING SYSTEM ───
+class LightingSystem {
+  constructor() { this.lights=[]; this.ambientLevel=0.15; this.flickerSpeed=1; this.maxLights=16; this.time=0; this._pos=new Float32Array(16*2); this._col=new Float32Array(16*3); this._par=new Float32Array(16*2); }
+  addLight(c) {
+    if(this.lights.length>=this.maxLights) return null;
+    const l={id:this.lights.length,x:c.x||0,y:c.y||0,radius:c.radius||5,intensity:c.intensity||1,color:c.color||[1,0.9,0.7],flicker:c.flicker||0,flickerOffset:Math.random()*100,pulse:c.pulse||0,pulseMin:c.pulseMin||0.5,active:true,type:c.type||'point',currentIntensity:c.intensity||1};
+    this.lights.push(l); return l;
+  }
+  update(dt,px,py,angle) {
+    this.time+=dt;
+    for(const l of this.lights) {
+      if(l.type==='player') { l.x=px+Math.cos(angle)*0.3; l.y=py+Math.sin(angle)*0.3; }
+      l.currentIntensity=l.intensity;
+      if(l.flicker>0) { const fn=Math.sin(this.time*15*this.flickerSpeed+l.flickerOffset)*0.3+Math.sin(this.time*23*this.flickerSpeed+l.flickerOffset*2)*0.2; l.currentIntensity*=1+fn*l.flicker*0.3; if(Math.random()<0.002*l.flicker) l.currentIntensity*=0.3; }
+      if(l.pulse>0) { const pv=(Math.sin(this.time*l.pulse)+1)*0.5; l.currentIntensity*=l.pulseMin+(1-l.pulseMin)*pv; }
+      l.currentIntensity=Math.max(0,Math.min(2,l.currentIntensity));
+    }
+  }
+  getLightData() {
+    let count=0;
+    for(const l of this.lights) { if(!l.active||count>=this.maxLights) continue; this._pos[count*2]=l.x; this._pos[count*2+1]=l.y; this._col[count*3]=l.color[0]; this._col[count*3+1]=l.color[1]; this._col[count*3+2]=l.color[2]; this._par[count*2]=l.radius; this._par[count*2+1]=l.currentIntensity; count++; }
+    return {positions:this._pos,colors:this._col,params:this._par,count};
+  }
+  calcLightAt(wx,wy) {
+    let total=this.ambientLevel, tR=0,tG=0,tB=0;
+    for(const l of this.lights) { if(!l.active) continue; const dx=wx-l.x,dy=wy-l.y,dist=Math.sqrt(dx*dx+dy*dy); let a=Math.max(0,1-dist/l.radius); a=a*a*l.currentIntensity; total+=a; tR+=l.color[0]*a; tG+=l.color[1]*a; tB+=l.color[2]*a; }
+    return {intensity:Math.min(total,2),tint:[tR,tG,tB]};
+  }
+  setAmbient(v) { this.ambientLevel=v; }
+}
+
+// ─── AUDIO ───
+class AudioSystem {
+  constructor() { this.ctx=null; this.masterGain=null; this.initialized=false; this.sounds=new Map(); this.lastFootstep=0; }
+  async init() {
+    if(this.initialized) return true;
+    try { this.ctx=new(window.AudioContext||window.webkitAudioContext)(); this.masterGain=this.ctx.createGain(); this.masterGain.gain.value=0.7; this.masterGain.connect(this.ctx.destination); this._createSounds(); this.initialized=true; document.getElementById('audio-status').textContent='🔊 Audio ON'; document.getElementById('audio-status').style.color='#33ff33'; this._startAmbient(); return true; } catch(e) { return false; }
+  }
+  _createSounds() { this.sounds.set('step1',this._makeStep(0.8,100)); this.sounds.set('step2',this._makeStep(1,120)); this.sounds.set('hum',this._makeHum()); }
+  _makeStep(pitch,len) { const sr=this.ctx.sampleRate,buf=this.ctx.createBuffer(1,sr*len/1000,sr),d=buf.getChannelData(0); for(let i=0;i<d.length;i++) { const t=i/sr; d[i]=((Math.random()*2-1)*0.3+Math.sin(t*150*pitch)*Math.exp(-t*50)*0.7)*Math.exp(-t*30); } return buf; }
+  _makeHum() { const sr=this.ctx.sampleRate,buf=this.ctx.createBuffer(1,sr*4,sr),d=buf.getChannelData(0); for(let i=0;i<d.length;i++) { const t=i/sr; d[i]=(Math.sin(t*60*Math.PI*2)*0.3+Math.sin(t*120*Math.PI*2)*0.15)*(0.8+Math.sin(t*0.5)*0.2)*0.25; } return buf; }
+  _startAmbient() { const src=this.ctx.createBufferSource(); src.buffer=this.sounds.get('hum'); src.loop=true; const g=this.ctx.createGain(); g.gain.value=0.3; src.connect(g); g.connect(this.masterGain); src.start(); }
+  playStep() { if(!this.initialized) return; const now=performance.now(); if(now-this.lastFootstep<350) return; this.lastFootstep=now; const buf=this.sounds.get(Math.random()>0.5?'step1':'step2'); const src=this.ctx.createBufferSource(); src.buffer=buf; src.playbackRate.value=0.9+Math.random()*0.2; const g=this.ctx.createGain(); g.gain.value=0.5*(0.8+Math.random()*0.4); src.connect(g); g.connect(this.masterGain); src.start(); }
+  update(isMoving) { if(isMoving) this.playStep(); }
+}
+
+// ─── WALL TEXTURE GEN ───
+class TexGen {
+  constructor(s=64) { this.s=s; }
+  _n(x,y,seed=0) { const n=Math.sin(x*12.9898+y*78.233+seed)*43758.5453; return n-Math.floor(n); }
+  _fbm(x,y,oct=4,seed=0) { let v=0,a=0.5,f=1; for(let i=0;i<oct;i++) { v+=a*this._n(x*f,y*f,seed+i*100); a*=0.5; f*=2; } return v; }
+  gen(fn,...args) { const s=this.s,d=new Uint8Array(s*s*4); for(let y=0;y<s;y++) for(let x=0;x<s;x++) { const[r,g,b]=fn.call(this,x,y,s,...args); const i=(y*s+x)*4; d[i]=r; d[i+1]=g; d[i+2]=b; d[i+3]=255; } return d; }
+  metalPanels(x,y,s,base,seed) { const grid=(x%16<2)||(y%16<2); const n=this._fbm(x/6,y/6,3,seed)*40-20; let r=base[0]+n,g=base[1]+n,b=base[2]+n; if(grid) { r-=50; g-=50; b-=45; } return [Math.max(0,Math.min(255,r)),Math.max(0,Math.min(255,g)),Math.max(0,Math.min(255,b))]; }
+  techWall(x,y,s,base,seed) { let r=base[0]*0.5,g=base[1]*0.5,b=base[2]*0.5; if(y%10<2||x%14<2) { r+=35; g+=40; b+=55; } if((x%14<4)&&(y%10<4)) { g+=70; b+=95; } return [Math.max(0,Math.min(255,r)),Math.max(0,Math.min(255,g)),Math.max(0,Math.min(255,b))]; }
+  concrete(x,y,s,base,seed) { const t=this._fbm(x/4,y/4,4,seed)*70-35; return [Math.max(0,Math.min(255,base[0]+t)),Math.max(0,Math.min(255,base[1]+t)),Math.max(0,Math.min(255,base[2]+t))]; }
+  grating(x,y,s,base,seed) { const cx=x%8,cy=y%8; if(Math.abs(cx-3.5)+Math.abs(cy-3.5)<3) return [12,15,20]; return [base[0],base[1],base[2]]; }
+  brick(x,y,s,base,seed) { const row=Math.floor(y/8),ox=(row%2)*8,bx=(x+ox)%16,by=y%8; if(bx<2||by<2) return [55,52,48]; const bv=(this._n(Math.floor((x+ox)/16)+row*1000,0,seed)-0.5)*60; return [Math.max(0,Math.min(255,base[0]+bv)),Math.max(0,Math.min(255,base[1]+bv*0.8)),Math.max(0,Math.min(255,base[2]+bv*0.6))]; }
+  crate(x,y,s,base,seed) { const grain=Math.sin(y*0.6)*22; const border=x<6||x>=s-6||y<6||y>=s-6; let r=base[0]+grain,g=base[1]+grain*0.9,b=base[2]+grain*0.7; if(border) { r+=40; g+=35; b+=25; } return [Math.max(0,Math.min(255,r)),Math.max(0,Math.min(255,g)),Math.max(0,Math.min(255,b))]; }
+  pillar(x,y,s,base,seed) { const t=this._n(x/4,0,seed)*28-14; return [Math.max(0,Math.min(255,base[0]+t)),Math.max(0,Math.min(255,base[1]+t)),Math.max(0,Math.min(255,base[2]+t))]; }
+  tileFloor(x,y,s,base,seed) { if((x%16<1)||(y%16<1)) return [40,42,45]; const tv=this._n(Math.floor(x/16),Math.floor(y/16),seed)*30-15; return [Math.max(0,Math.min(255,base[0]+tv)),Math.max(0,Math.min(255,base[1]+tv)),Math.max(0,Math.min(255,base[2]+tv))]; }
+  metalFloor(x,y,s,base,seed) { const diamond=((x%8)+(y%8))%8<2; let r=base[0],g=base[1],b=base[2]; if(diamond) { r+=25; g+=25; b+=30; } return [Math.max(0,Math.min(255,r)),Math.max(0,Math.min(255,g)),Math.max(0,Math.min(255,b))]; }
+  dirtFloor(x,y,s,base,seed) { const n1=this._fbm(x/3,y/3,4,seed)*50-25; return [Math.max(0,Math.min(255,base[0]+n1)),Math.max(0,Math.min(255,base[1]+n1*0.9)),Math.max(0,Math.min(255,base[2]+n1*0.7))]; }
+  ceilingPanels(x,y,s,base,seed) { const frame=(x%32<2)||(y%32<2); if(frame) return [Math.max(0,base[0]-30),Math.max(0,base[1]-30),Math.max(0,base[2]-25)]; return [base[0],base[1],base[2]]; }
+  techCeiling(x,y,s,base,seed) { const beam=(x%24<3)||(y%24<3); const light=(x%24>8&&x%24<16)&&(y%24>8&&y%24<16); let r=base[0],g=base[1],b=base[2]; if(beam) { r-=20; g-=20; b-=15; } if(light) { r+=50; g+=60; b+=80; } return [Math.max(0,Math.min(255,r)),Math.max(0,Math.min(255,g)),Math.max(0,Math.min(255,b))]; }
+  skyCeiling(x,y,s,base,seed) { if(this._n(x*5,y*5,seed)>0.97) return [200,200,220]; return [base[0],base[1],base[2]]; }
+}
+
+// ─── WEBGL2 RENDERER WITH SPRITES ───
+class Renderer {
+  constructor(cfg={}) { this.rayCount=cfg.rayCount||400; this.fov=cfg.fov||Math.PI*0.6; this.maxDepth=cfg.maxDepth||16; this.texGen=new TexGen(64); this.spriteTexGen=new SpriteTexGen(64); this.drawCalls=0; this.spriteCount=0; }
+  
+  init(canvas) {
+    this.canvas=canvas; this.gl=canvas.getContext('webgl2',{antialias:false,alpha:false});
+    if(!this.gl) return false;
+    this._initWallProg(); this._initFloorProg(); this._initSpriteProg();
+    this._initBuffers(); this._initTextures(); this._initSpriteTextures(); this._initWorldTex();
+    this.resize(); window.addEventListener('resize',()=>this.resize());
+    return true;
+  }
+  
+  resize() { const c=this.canvas.parentElement; this.width=c.clientWidth; this.height=c.clientHeight; this.canvas.width=this.width; this.canvas.height=this.height; this.gl.viewport(0,0,this.width,this.height); }
+  _compile(type,src) { const gl=this.gl,s=gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s); if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(s)); return s; }
+  _program(vs,fs) { const gl=this.gl,p=gl.createProgram(); gl.attachShader(p,this._compile(gl.VERTEX_SHADER,vs)); gl.attachShader(p,this._compile(gl.FRAGMENT_SHADER,fs)); gl.linkProgram(p); return p; }
+  
+  _initWallProg() {
+    const vs=`#version 300 es
+      in vec2 aPos; in vec2 aUV; in float aTex; in float aFog; in float aSide; in vec2 aWP;
+      out vec2 vUV; flat out int vTex; out float vFog; out float vSide; out vec2 vWP;
+      void main() { gl_Position=vec4(aPos,0,1); vUV=aUV; vTex=int(aTex); vFog=aFog; vSide=aSide; vWP=aWP; }`;
+    const fs=`#version 300 es
+      precision highp float; precision highp sampler2DArray;
+      in vec2 vUV; flat in int vTex; in float vFog; in float vSide; in vec2 vWP;
+      uniform sampler2DArray uTex; uniform float uAmb; uniform int uLC; uniform vec2 uLP[16]; uniform vec3 uLCol[16]; uniform vec2 uLPar[16];
+      out vec4 fc;
+      void main() {
+        vec3 c=texture(uTex,vec3(fract(vUV),float(vTex))).rgb; c*=mix(1.0,0.75,vSide);
+        float tl=uAmb; vec3 tint=vec3(0);
+        for(int i=0;i<16;i++) { if(i>=uLC) break; float d=distance(vWP,uLP[i]); float a=max(0.0,1.0-d/uLPar[i].x); a=a*a*uLPar[i].y; tl+=a; tint+=uLCol[i]*a; }
+        c*=min(tl,2.0); if(length(tint)>0.01) c*=normalize(vec3(1)+tint*0.5);
+        c=mix(c,vec3(0.07,0.085,0.11),vFog); fc=vec4(c,1);
+      }`;
+    this.wallProg=this._program(vs,fs);
+    const gl=this.gl;
+    this.wA={pos:gl.getAttribLocation(this.wallProg,'aPos'),uv:gl.getAttribLocation(this.wallProg,'aUV'),tex:gl.getAttribLocation(this.wallProg,'aTex'),fog:gl.getAttribLocation(this.wallProg,'aFog'),side:gl.getAttribLocation(this.wallProg,'aSide'),wp:gl.getAttribLocation(this.wallProg,'aWP')};
+    this.wU={tex:gl.getUniformLocation(this.wallProg,'uTex'),amb:gl.getUniformLocation(this.wallProg,'uAmb'),lc:gl.getUniformLocation(this.wallProg,'uLC'),lp:gl.getUniformLocation(this.wallProg,'uLP'),lcol:gl.getUniformLocation(this.wallProg,'uLCol'),lpar:gl.getUniformLocation(this.wallProg,'uLPar')};
+  }
+  
+  _initFloorProg() {
+    const vs=`#version 300 es
+      in vec2 aPos; out vec2 vSP; void main() { gl_Position=vec4(aPos,0,1); vSP=aPos; }`;
+    const fs=`#version 300 es
+      precision highp float; precision highp sampler2DArray; precision highp sampler2D;
+      in vec2 vSP;
+      uniform sampler2DArray uTex; uniform sampler2D uWD; uniform sampler2D uWM;
+      uniform vec2 uPP; uniform float uPA; uniform float uFov; uniform float uMD; uniform int uRC;
+      uniform float uAmb; uniform int uLC; uniform vec2 uLP[16]; uniform vec3 uLCol[16]; uniform vec2 uLPar[16];
+      out vec4 fc;
+      int gFT(int t) { if(t==1) return 10; if(t==2) return 10; if(t==3) return 11; if(t==4) return 9; if(t==5) return 15; if(t==6) return 12; return 13; }
+      int gCT(int t) { if(t==1) return 14; if(t==2) return 14; if(t==3) return 15; if(t==4) return 14; if(t==5) return 15; if(t==6) return 16; return 17; }
+      void main() {
+        vec2 uv=vSP*0.5+0.5; bool isF=uv.y<0.5; float p=isF?(0.5-uv.y):(uv.y-0.5);
+        if(p<0.001) { fc=vec4(0.07,0.085,0.11,1); return; }
+        float rd=0.5/p; if(rd>uMD) { fc=vec4(0.07,0.085,0.11,1); return; }
+        float wd=texture(uWD,vec2(uv.x*float(uRC)/1024.0,0.5)).r;
+        if(rd>wd) discard;
+        float ra=uPA+(uv.x-0.5)*uFov; float wx=uPP.x+rd*cos(ra); float wy=uPP.y+rd*sin(ra);
+        vec2 muv=vec2(wx/24.0,wy/24.0);
+        if(muv.x<0.0||muv.x>1.0||muv.y<0.0||muv.y>1.0) { fc=vec4(0.07,0.085,0.11,1); return; }
+        int st=int(texture(uWM,muv).r*255.0+0.5);
+        if(st==0||st>=7) { fc=vec4(0.07,0.085,0.11,1); return; }
+        vec3 c=texture(uTex,vec3(fract(vec2(wx,wy)),float(isF?gFT(st):gCT(st)))).rgb;
+        float tl=uAmb; vec3 tint=vec3(0); vec2 wp=vec2(wx,wy);
+        for(int i=0;i<16;i++) { if(i>=uLC) break; float d=distance(wp,uLP[i]); float a=max(0.0,1.0-d/uLPar[i].x); a=a*a*uLPar[i].y; tl+=a; tint+=uLCol[i]*a; }
+        c*=min(tl,2.0); if(length(tint)>0.01) c*=normalize(vec3(1)+tint*0.5);
+        c*=max(0.5,1.0-rd*0.03); c=mix(c,vec3(0.07,0.085,0.11),clamp((rd-6.0)*0.08,0.0,1.0));
+        fc=vec4(c,1);
+      }`;
+    this.floorProg=this._program(vs,fs);
+    const gl=this.gl;
+    this.fA={pos:gl.getAttribLocation(this.floorProg,'aPos')};
+    this.fU={tex:gl.getUniformLocation(this.floorProg,'uTex'),wd:gl.getUniformLocation(this.floorProg,'uWD'),wm:gl.getUniformLocation(this.floorProg,'uWM'),pp:gl.getUniformLocation(this.floorProg,'uPP'),pa:gl.getUniformLocation(this.floorProg,'uPA'),fov:gl.getUniformLocation(this.floorProg,'uFov'),md:gl.getUniformLocation(this.floorProg,'uMD'),rc:gl.getUniformLocation(this.floorProg,'uRC'),amb:gl.getUniformLocation(this.floorProg,'uAmb'),lc:gl.getUniformLocation(this.floorProg,'uLC'),lp:gl.getUniformLocation(this.floorProg,'uLP'),lcol:gl.getUniformLocation(this.floorProg,'uLCol'),lpar:gl.getUniformLocation(this.floorProg,'uLPar')};
+  }
+  
+  _initSpriteProg() {
+    const vs=`#version 300 es
+      in vec2 aPos; in vec2 aUV; in float aTex; in float aLight; in vec3 aTint;
+      out vec2 vUV; flat out int vTex; out float vLight; out vec3 vTint;
+      void main() { gl_Position=vec4(aPos,0,1); vUV=aUV; vTex=int(aTex); vLight=aLight; vTint=aTint; }`;
+    const fs=`#version 300 es
+      precision highp float; precision highp sampler2DArray;
+      in vec2 vUV; flat in int vTex; in float vLight; in vec3 vTint;
+      uniform sampler2DArray uSTex;
+      out vec4 fc;
+      void main() {
+        vec4 c=texture(uSTex,vec3(vUV,float(vTex)));
+        if(c.a<0.5) discard;
+        c.rgb*=vLight; if(length(vTint)>0.01) c.rgb*=normalize(vec3(1)+vTint*0.5);
+        fc=c;
+      }`;
+    this.spriteProg=this._program(vs,fs);
+    const gl=this.gl;
+    this.sA={pos:gl.getAttribLocation(this.spriteProg,'aPos'),uv:gl.getAttribLocation(this.spriteProg,'aUV'),tex:gl.getAttribLocation(this.spriteProg,'aTex'),light:gl.getAttribLocation(this.spriteProg,'aLight'),tint:gl.getAttribLocation(this.spriteProg,'aTint')};
+    this.sU={tex:gl.getUniformLocation(this.spriteProg,'uSTex')};
+  }
+  
+  _initBuffers() {
+    const gl=this.gl;
+    // Wall VAO
+    this.wallVAO=gl.createVertexArray(); gl.bindVertexArray(this.wallVAO);
+    this.wallBuf=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,this.wallBuf);
+    const ws=9*4;
+    gl.enableVertexAttribArray(this.wA.pos); gl.vertexAttribPointer(this.wA.pos,2,gl.FLOAT,false,ws,0);
+    gl.enableVertexAttribArray(this.wA.uv); gl.vertexAttribPointer(this.wA.uv,2,gl.FLOAT,false,ws,8);
+    gl.enableVertexAttribArray(this.wA.tex); gl.vertexAttribPointer(this.wA.tex,1,gl.FLOAT,false,ws,16);
+    gl.enableVertexAttribArray(this.wA.fog); gl.vertexAttribPointer(this.wA.fog,1,gl.FLOAT,false,ws,20);
+    gl.enableVertexAttribArray(this.wA.side); gl.vertexAttribPointer(this.wA.side,1,gl.FLOAT,false,ws,24);
+    gl.enableVertexAttribArray(this.wA.wp); gl.vertexAttribPointer(this.wA.wp,2,gl.FLOAT,false,ws,28);
+    // Floor VAO
+    this.floorVAO=gl.createVertexArray(); gl.bindVertexArray(this.floorVAO);
+    this.floorBuf=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,this.floorBuf);
+    gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,-1,1,1,-1,1]),gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(this.fA.pos); gl.vertexAttribPointer(this.fA.pos,2,gl.FLOAT,false,0,0);
+    // Sprite VAO
+    this.spriteVAO=gl.createVertexArray(); gl.bindVertexArray(this.spriteVAO);
+    this.spriteBuf=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,this.spriteBuf);
+    const ss=9*4;
+    gl.enableVertexAttribArray(this.sA.pos); gl.vertexAttribPointer(this.sA.pos,2,gl.FLOAT,false,ss,0);
+    gl.enableVertexAttribArray(this.sA.uv); gl.vertexAttribPointer(this.sA.uv,2,gl.FLOAT,false,ss,8);
+    gl.enableVertexAttribArray(this.sA.tex); gl.vertexAttribPointer(this.sA.tex,1,gl.FLOAT,false,ss,16);
+    gl.enableVertexAttribArray(this.sA.light); gl.vertexAttribPointer(this.sA.light,1,gl.FLOAT,false,ss,20);
+    gl.enableVertexAttribArray(this.sA.tint); gl.vertexAttribPointer(this.sA.tint,3,gl.FLOAT,false,ss,24);
+    gl.bindVertexArray(null);
+    this.wallData=new Float32Array(800*6*9); this.wallDistData=new Float32Array(1024); this.spriteData=new Float32Array(200*6*9);
+  }
+  
+  _initTextures() {
+    const gl=this.gl,tg=this.texGen,s=64;
+    const texs=[tg.gen(tg.metalPanels,[120,125,135],42),tg.gen(tg.metalPanels,[150,135,95],43),tg.gen(tg.techWall,[70,85,110],44),tg.gen(tg.concrete,[100,100,105],45),tg.gen(tg.concrete,[85,110,90],46),tg.gen(tg.brick,[145,95,75],47),tg.gen(tg.grating,[110,115,125],48),tg.gen(tg.crate,[160,130,85],49),tg.gen(tg.pillar,[150,148,145],50),tg.gen(tg.tileFloor,[70,72,78],60),tg.gen(tg.metalFloor,[85,88,95],61),tg.gen(tg.grating,[90,95,105],62),tg.gen(tg.dirtFloor,[110,95,70],63),tg.gen(tg.concrete,[75,78,82],64),tg.gen(tg.ceilingPanels,[55,58,65],70),tg.gen(tg.techCeiling,[50,55,65],71),tg.gen(tg.skyCeiling,[15,18,28],72),tg.gen(tg.concrete,[60,62,68],73)];
+    this.texAtlas=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D_ARRAY,this.texAtlas);
+    gl.texImage3D(gl.TEXTURE_2D_ARRAY,0,gl.RGBA,s,s,texs.length,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
+    for(let i=0;i<texs.length;i++) gl.texSubImage3D(gl.TEXTURE_2D_ARRAY,0,0,0,i,s,s,1,gl.RGBA,gl.UNSIGNED_BYTE,texs[i]);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_WRAP_S,gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_WRAP_T,gl.REPEAT);
+    gl.generateMipmap(gl.TEXTURE_2D_ARRAY);
+    this.wallDistTex=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,this.wallDistTex);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.R32F,1024,1,0,gl.RED,gl.FLOAT,null);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
+    this.wallTexMap={'HANGAR':0,'PLATFORM':1,'TERMINAL BAY':2,'VOID':3,'OPS CENTER':4,'EXTERIOR':5,'CORRIDOR':6,'CRATE':7,'PILLAR':8};
+  }
+  
+  _initSpriteTextures() {
+    const gl=this.gl,stg=this.spriteTexGen,s=64;
+    const stexs=[stg.barrel(42),stg.crate(43),stg.lamp(44),stg.terminal(45),stg.column(46),stg.canister(47)];
+    this.spriteAtlas=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D_ARRAY,this.spriteAtlas);
+    gl.texImage3D(gl.TEXTURE_2D_ARRAY,0,gl.RGBA,s,s,stexs.length,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
+    for(let i=0;i<stexs.length;i++) gl.texSubImage3D(gl.TEXTURE_2D_ARRAY,0,0,0,i,s,s,1,gl.RGBA,gl.UNSIGNED_BYTE,stexs[i]);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+    gl.generateMipmap(gl.TEXTURE_2D_ARRAY);
+  }
+  
+  _initWorldTex() {
+    const gl=this.gl;
+    this.worldMapTex=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,this.worldMapTex);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.R8,24,24,0,gl.RED,gl.UNSIGNED_BYTE,null);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
+    this._worldMapData=new Uint8Array(24*24);
+    this._worldMapTM={'void':0,'hangar':1,'hangar_platform':2,'corridor':3,'zigzag':4,'computer':5,'outdoor':6,'pillar':7,'crate':8};
+  }
+
+  updateWorldMap(world) {
+    const gl=this.gl,data=this._worldMapData,tm=this._worldMapTM;
+    for(let y=0;y<24;y++) for(let x=0;x<24;x++) data[y*24+x]=tm[world.grid[y][x]]||0;
+    gl.bindTexture(gl.TEXTURE_2D,this.worldMapTex);
+    gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,24,24,gl.RED,gl.UNSIGNED_BYTE,data);
+  }
+  
+  setRayCount(n) { this.rayCount=n; }
+  setViewDist(d) { this.maxDepth=d; }
+  
+  render(world,vis,px,py,angle,lighting,spriteManager) {
+    const gl=this.gl; gl.clearColor(0.04,0.05,0.07,1); gl.clear(gl.COLOR_BUFFER_BIT);
+    const ld=lighting.getLightData();
+    
+    // Walls
+    profiler.start('walls');
+    const colW=2/this.rayCount; let wv=0; const wd=this.wallData;
+    for(let i=0;i<this.rayCount;i++) {
+      const ra=angle+((i/this.rayCount)-0.5)*this.fov;
+      const hit=this._castRay(world,vis,px,py,angle,ra);
+      this.wallDistData[i]=hit?hit.dist:this.maxDepth;
+      if(hit) {
+        const x0=-1+i*colW,x1=x0+colW;
+        const vs=[[x0,hit.top,hit.u,0],[x1,hit.top,hit.u,0],[x0,hit.bottom,hit.u,1],[x1,hit.top,hit.u,0],[x1,hit.bottom,hit.u,1],[x0,hit.bottom,hit.u,1]];
+        for(let v=0;v<6;v++) { const idx=wv*9; wd[idx]=vs[v][0]; wd[idx+1]=vs[v][1]; wd[idx+2]=vs[v][2]; wd[idx+3]=vs[v][3]; wd[idx+4]=hit.tex; wd[idx+5]=hit.fog; wd[idx+6]=hit.side; wd[idx+7]=hit.worldX; wd[idx+8]=hit.worldY; wv++; }
+      }
+    }
+    gl.bindTexture(gl.TEXTURE_2D,this.wallDistTex);
+    gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,this.rayCount,1,gl.RED,gl.FLOAT,this.wallDistData.subarray(0,this.rayCount));
+    profiler.end('walls');
+    
+    // Floors
+    profiler.start('floors');
+    this.drawCalls=0;
+    gl.useProgram(this.floorProg); gl.bindVertexArray(this.floorVAO);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D_ARRAY,this.texAtlas); gl.uniform1i(this.fU.tex,0);
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D,this.wallDistTex); gl.uniform1i(this.fU.wd,1);
+    gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D,this.worldMapTex); gl.uniform1i(this.fU.wm,2);
+    gl.uniform2f(this.fU.pp,px,py); gl.uniform1f(this.fU.pa,angle); gl.uniform1f(this.fU.fov,this.fov); gl.uniform1f(this.fU.md,this.maxDepth); gl.uniform1i(this.fU.rc,this.rayCount);
+    gl.uniform1f(this.fU.amb,lighting.ambientLevel); gl.uniform1i(this.fU.lc,ld.count);
+    gl.uniform2fv(this.fU.lp,ld.positions); gl.uniform3fv(this.fU.lcol,ld.colors); gl.uniform2fv(this.fU.lpar,ld.params);
+    gl.drawArrays(gl.TRIANGLES,0,6); this.drawCalls++;
+    profiler.end('floors');
+    
+    // Walls draw
+    if(wv>0) {
+      gl.useProgram(this.wallProg); gl.bindVertexArray(this.wallVAO);
+      gl.bindBuffer(gl.ARRAY_BUFFER,this.wallBuf); gl.bufferData(gl.ARRAY_BUFFER,wd.subarray(0,wv*9),gl.DYNAMIC_DRAW);
+      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D_ARRAY,this.texAtlas); gl.uniform1i(this.wU.tex,0);
+      gl.uniform1f(this.wU.amb,lighting.ambientLevel); gl.uniform1i(this.wU.lc,ld.count);
+      gl.uniform2fv(this.wU.lp,ld.positions); gl.uniform3fv(this.wU.lcol,ld.colors); gl.uniform2fv(this.wU.lpar,ld.params);
+      gl.drawArrays(gl.TRIANGLES,0,wv); this.drawCalls++;
+    }
+    
+    // Sprites
+    profiler.start('sprites');
+    this._renderSprites(spriteManager,px,py,angle,lighting);
+    profiler.end('sprites');
+  }
+  
+  _renderSprites(spriteManager,px,py,angle,lighting) {
+    const gl=this.gl, sprites=spriteManager.getVisible();
+    if(sprites.length===0) { this.spriteCount=0; return; }
+    const sd=this.spriteData; let sv=0;
+    const halfFov=this.fov/2, halfFovTan=Math.tan(halfFov), ar=this.width/this.height;
+
+    for(const sp of sprites) {
+      const screenX=sp.screenX/halfFovTan, dist=sp.distance;
+      const sH=(sp.scale*1.5)/dist, sW=sH/ar;
+      const left=screenX-sW/2, right=screenX+sW/2;
+      // Ground sprites on floor (offset down so bottom is below eye level)
+      const top=sH*0.35, bottom=-sH*0.65;
+      if(right<-1||left>1) continue;
+
+      // Wall occlusion - check multiple columns for robustness
+      const spriteAngle=Math.atan(sp.screenX);
+      const normalizedCol=(spriteAngle/halfFov+1)/2;
+      const centerCol=Math.floor(normalizedCol*this.rayCount);
+      const col=Math.max(0,Math.min(this.rayCount-1,centerCol));
+
+      // Check center and adjacent columns, use minimum wall distance
+      const colL=Math.max(0,col-1), colR=Math.min(this.rayCount-1,col+1);
+      const minWallDist=Math.min(this.wallDistData[col],this.wallDistData[colL],this.wallDistData[colR]);
+      // Add small margin (0.1) to prevent sprites from appearing on walls
+      if(dist>=minWallDist-0.1) continue;
+
+      const li=lighting.calcLightAt(sp.x,sp.y);
+      const verts=[[left,top,0,0],[right,top,1,0],[left,bottom,0,1],[right,top,1,0],[right,bottom,1,1],[left,bottom,0,1]];
+      for(let v=0;v<6;v++) { const idx=sv*9; sd[idx]=verts[v][0]; sd[idx+1]=verts[v][1]; sd[idx+2]=verts[v][2]; sd[idx+3]=verts[v][3]; sd[idx+4]=sp.texture; sd[idx+5]=li.intensity; sd[idx+6]=li.tint[0]; sd[idx+7]=li.tint[1]; sd[idx+8]=li.tint[2]; sv++; }
+    }
+
+    this.spriteCount=sv/6;
+    if(sv>0) {
+      gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+      gl.useProgram(this.spriteProg); gl.bindVertexArray(this.spriteVAO);
+      gl.bindBuffer(gl.ARRAY_BUFFER,this.spriteBuf); gl.bufferData(gl.ARRAY_BUFFER,sd.subarray(0,sv*9),gl.DYNAMIC_DRAW);
+      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D_ARRAY,this.spriteAtlas); gl.uniform1i(this.sU.tex,0);
+      gl.drawArrays(gl.TRIANGLES,0,sv); this.drawCalls++;
+      gl.disable(gl.BLEND);
+    }
+  }
+  
+  _castRay(world,vis,px,py,va,ra) {
+    const step=0.02,cosA=Math.cos(ra),sinA=Math.sin(ra),cosCorr=Math.cos(ra-va);
+    let x=px,y=py,dist=0;
+    while(dist<this.maxDepth) {
+      x+=cosA*step; y+=sinA*step; dist+=step;
+      const gx=Math.floor(x),gy=Math.floor(y),sec=world.getSector(x,y);
+      if(!sec.walkable) {
+        if(!vis.isVisible(gx,gy)&&!vis.isDiscovered(gx,gy)) return null;
+        const cd=dist*cosCorr,wh=Math.min(2,1.7/cd);
+        const hx=x-gx,hy=y-gy,isNS=hx<0.03||hx>0.97;
+        return {dist:cd,top:wh/2,bottom:-wh/2,u:isNS?hy:hx,tex:this.wallTexMap[sec.name]||3,fog:Math.max(0,Math.min(1,(cd-5)*0.08)),side:isNS?1:0,worldX:x,worldY:y};
+      }
+    }
+    return null;
+  }
+}
+
+// ─── WORLD ───
+class World {
+  constructor(cfg={}) { this.width=cfg.width||32; this.height=cfg.height||32; this.grid=Array(this.height).fill(null).map(()=>Array(this.width).fill('void')); this.sectorTypes=new Map(); this.sectorTypes.set('void',{walkable:false,floorColor:[20,20,25],name:'VOID'}); }
+  registerSectorTypes(types) { for(const[k,v] of Object.entries(types)) this.sectorTypes.set(k,{...v}); }
+  getSector(x,y) { const gx=Math.floor(x),gy=Math.floor(y); if(gx<0||gx>=this.width||gy<0||gy>=this.height) return this.sectorTypes.get('void'); return this.sectorTypes.get(this.grid[gy][gx])||this.sectorTypes.get('void'); }
+  fillRect(x1,y1,x2,y2,type) { for(let y=Math.min(y1,y2);y<=Math.max(y1,y2);y++) for(let x=Math.min(x1,x2);x<=Math.max(x1,x2);x++) if(x>=0&&x<this.width&&y>=0&&y<this.height) this.grid[y][x]=type; }
+  countWalkable() { let c=0; for(let y=0;y<this.height;y++) for(let x=0;x<this.width;x++) if(this.getSector(x,y).walkable) c++; return c; }
+}
+
+// ─── VISIBILITY ───
+class Visibility {
+  constructor(world,cfg={}) { this.world=world; this.viewDistance=cfg.viewDistance||14; this.discovered=new Set(); this.currentlyVisible=new Set(); this.totalWalkable=world.countWalkable(); }
+  update(x,y) {
+    this.currentlyVisible.clear();
+    for(let i=0;i<180;i++) {
+      const angle=(i/180)*Math.PI*2;
+      let rx=x,ry=y;
+      const dx=Math.cos(angle)*0.4,dy=Math.sin(angle)*0.4;
+      for(let d=0;d<this.viewDistance;d+=0.4) {
+        rx+=dx; ry+=dy;
+        const k=`${Math.floor(rx)},${Math.floor(ry)}`;
+        this.currentlyVisible.add(k);
+        const s=this.world.getSector(rx,ry);
+        if(s.walkable) this.discovered.add(k);
+        if(!s.walkable) break;
+      }
+    }
+  }
+  isVisible(gx,gy) { return this.currentlyVisible.has(`${gx},${gy}`); }
+  isDiscovered(gx,gy) { return this.discovered.has(`${gx},${gy}`); }
+}
+
+class Movement {
+  constructor(world) { this.world=world; }
+  move(e,dx,dy) { const r=e.radius||0.2,nx=e.x+dx,ny=e.y+dy; if(this._can(nx,ny,r)) return {x:nx,y:ny}; if(this._can(nx,e.y,r)) return {x:nx,y:e.y}; if(this._can(e.x,ny,r)) return {x:e.x,y:ny}; return {x:e.x,y:e.y}; }
+  _can(x,y,r) { for(const[px,py] of [[x,y],[x-r,y-r],[x+r,y-r],[x-r,y+r],[x+r,y+r]]) if(!this.world.getSector(px,py).walkable) return false; return true; }
+}
+
+class Input {
+  constructor() { this.keys={}; this.mouseDX=0; this.locked=false; }
+  init(target) {
+    window.addEventListener('keydown',e=>{ this.keys[e.code]=true; if(['KeyW','KeyA','KeyS','KeyD','KeyF'].includes(e.code)) e.preventDefault(); });
+    window.addEventListener('keyup',e=>this.keys[e.code]=false);
+    document.addEventListener('mousemove',e=>{ if(this.locked) this.mouseDX+=e.movementX; });
+    document.addEventListener('pointerlockchange',()=>{ this.locked=document.pointerLockElement===target; document.getElementById('click-prompt').classList.toggle('hidden',this.locked); });
+    target.addEventListener('click',()=>{ if(!this.locked) target.requestPointerLock(); });
+  }
+  getMovement(dt,speed) { let f=0,s=0,t=0; if(this.keys['KeyW']) f+=speed; if(this.keys['KeyS']) f-=speed; if(this.keys['KeyA']) s-=speed; if(this.keys['KeyD']) s+=speed; if(this.keys['ShiftLeft']||this.keys['ShiftRight']) { f*=1.7; s*=1.7; } t+=this.mouseDX*0.002; this.mouseDX=0; return {forward:f,strafe:s,turn:t}; }
+  isRunning() { return this.keys['ShiftLeft']||this.keys['ShiftRight']; }
+}
+
+class Minimap {
+  constructor(cfg={}) { this.fov=cfg.fov||Math.PI*0.6; }
+  init(canvas) { this.canvas=canvas; this.ctx=canvas.getContext('2d'); this.resize(); window.addEventListener('resize',()=>this.resize()); }
+  resize() { const c=this.canvas.parentElement; const sz=Math.min(c.clientWidth-16,c.clientHeight-24); this.canvas.width=sz; this.canvas.height=sz; }
+  render(world,vis,px,py,angle,lights,sprites) {
+    const ctx=this.ctx,w=this.canvas.width,h=this.canvas.height,cw=w/world.width,ch=h/world.height;
+    ctx.fillStyle='#030305'; ctx.fillRect(0,0,w,h);
+    for(let gy=0;gy<world.height;gy++) for(let gx=0;gx<world.width;gx++) {
+      const sec=world.getSector(gx,gy),v=vis.isVisible(gx,gy),d=vis.isDiscovered(gx,gy);
+      let col; if(!d&&!v) col='#050508'; else if(!sec.walkable) col=v?'#3a3a45':'#1a1a22'; else if(v) { const c=sec.floorColor; col=`rgb(${c[0]*0.6|0},${c[1]*0.6|0},${c[2]*0.6|0})`; } else col='#121215';
+      ctx.fillStyle=col; ctx.fillRect(gx*cw,gy*ch,cw+0.5,ch+0.5);
+    }
+    ctx.fillStyle='#ff9933';
+    for(const sp of sprites) { ctx.beginPath(); ctx.arc(sp.x*cw,sp.y*ch,2,0,Math.PI*2); ctx.fill(); }
+    for(const l of lights) { ctx.fillStyle=`rgba(${l.color[0]*255|0},${l.color[1]*255|0},${l.color[2]*255|0},${l.currentIntensity*0.3})`; ctx.beginPath(); ctx.arc(l.x*cw,l.y*ch,l.radius*cw*0.25,0,Math.PI*2); ctx.fill(); }
+    const mx=px*cw,my=py*ch;
+    ctx.fillStyle='#33ff33'; ctx.shadowColor='#33ff33'; ctx.shadowBlur=5;
+    ctx.beginPath(); ctx.arc(mx,my,3,0,Math.PI*2); ctx.fill(); ctx.shadowBlur=0;
+    ctx.strokeStyle='#33ff33'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(mx,my); ctx.lineTo(mx+Math.cos(angle)*8,my+Math.sin(angle)*8); ctx.stroke();
+  }
+}
+
+class Overlay {
+  init(canvas) { this.canvas=canvas; this.ctx=canvas.getContext('2d'); this.resize(); window.addEventListener('resize',()=>this.resize()); }
+  resize() { const c=this.canvas.parentElement; this.width=c.clientWidth; this.height=c.clientHeight; this.canvas.width=this.width; this.canvas.height=this.height; }
+  render() {
+    const ctx=this.ctx,w=this.width,h=this.height;
+    ctx.clearRect(0,0,w,h);
+    const vig=ctx.createRadialGradient(w/2,h/2,h*0.15,w/2,h/2,h*0.95);
+    vig.addColorStop(0,'rgba(0,0,0,0)'); vig.addColorStop(1,'rgba(0,0,0,0.6)');
+    ctx.fillStyle=vig; ctx.fillRect(0,0,w,h);
+    ctx.strokeStyle='rgba(51,255,51,0.8)'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(w/2-14,h/2); ctx.lineTo(w/2-5,h/2); ctx.moveTo(w/2+5,h/2); ctx.lineTo(w/2+14,h/2);
+    ctx.moveTo(w/2,h/2-14); ctx.lineTo(w/2,h/2-5); ctx.moveTo(w/2,h/2+5); ctx.lineTo(w/2,h/2+14); ctx.stroke();
+  }
+}
+
+// ─── LEVEL ───
+const SECTOR_TYPES={hangar:{walkable:true,floorColor:[80,82,88],name:'HANGAR'},hangar_platform:{walkable:true,floorColor:[120,110,85],name:'PLATFORM'},corridor:{walkable:true,floorColor:[75,78,85],name:'CORRIDOR'},zigzag:{walkable:true,floorColor:[70,90,78],name:'OPS CENTER'},computer:{walkable:true,floorColor:[75,80,100],name:'TERMINAL BAY'},outdoor:{walkable:true,floorColor:[100,95,80],name:'EXTERIOR'},pillar:{walkable:false,floorColor:[130,125,118],name:'PILLAR'},crate:{walkable:false,floorColor:[130,105,70],name:'CRATE'}};
+const REGIONS=[{type:'hangar',x1:1,y1:9,x2:7,y2:15},{type:'hangar_platform',x1:4,y1:11,x2:6,y2:13},{type:'corridor',x1:7,y1:11,x2:11,y2:13},{type:'corridor',x1:17,y1:11,x2:19,y2:13},{type:'zigzag',x1:11,y1:7,x2:17,y2:17},{type:'pillar',x1:13,y1:9,x2:13,y2:9},{type:'pillar',x1:15,y1:9,x2:15,y2:9},{type:'pillar',x1:13,y1:15,x2:13,y2:15},{type:'pillar',x1:15,y1:15,x2:15,y2:15},{type:'computer',x1:19,y1:9,x2:23,y2:15},{type:'crate',x1:21,y1:10,x2:22,y2:10},{type:'crate',x1:21,y1:14,x2:21,y2:14},{type:'outdoor',x1:1,y1:1,x2:7,y2:7},{type:'hangar',x1:3,y1:8,x2:5,y2:8}];
+
+// ─── SETUP ───
+const world=new World({width:24,height:24});
+world.registerSectorTypes(SECTOR_TYPES);
+REGIONS.forEach(r=>world.fillRect(r.x1,r.y1,r.x2,r.y2,r.type));
+
+const visibility=new Visibility(world,{viewDistance:16});
+const movement=new Movement(world);
+const input=new Input();
+const renderer=new Renderer({rayCount:400,maxDepth:16});
+const overlay=new Overlay();
+const minimap=new Minimap();
+const lighting=new LightingSystem();
+const audio=new AudioSystem();
+const spriteManager=new SpriteManager();
+const player={x:3.5,y:12.5,angle:0,radius:0.2,speed:3};
+
+// Lights
+lighting.addLight({x:3,y:11,radius:6,intensity:0.9,color:[1,0.95,0.8],flicker:0.3});
+lighting.addLight({x:6,y:14,radius:5,intensity:0.7,color:[1,0.9,0.7],flicker:0.2});
+lighting.addLight({x:9,y:12,radius:4,intensity:0.8,color:[0.9,0.95,1],flicker:0.6});
+lighting.addLight({x:18,y:12,radius:4,intensity:0.8,color:[0.9,0.95,1],flicker:0.5});
+lighting.addLight({x:14,y:12,radius:7,intensity:0.8,color:[0.7,1,0.8],flicker:0.1});
+lighting.addLight({x:21,y:12,radius:5,intensity:0.9,color:[0.6,0.8,1],pulse:2});
+lighting.addLight({x:4,y:4,radius:8,intensity:0.5,color:[0.7,0.8,1],flicker:0});
+lighting.addLight({x:21,y:10,radius:3,intensity:0.6,color:[1,0.3,0.2],pulse:4,pulseMin:0.2});
+const flashlight=lighting.addLight({x:player.x,y:player.y,radius:8,intensity:0,color:[1,1,0.95],type:'player'});
+let flashlightOn=false;
+
+// Sprites: 0=barrel, 1=crate, 2=lamp, 3=terminal, 4=column, 5=canister
+spriteManager.add({x:2.5,y:10.5,texture:0,scale:0.8});
+spriteManager.add({x:2.5,y:14.5,texture:0,scale:0.8});
+spriteManager.add({x:1.5,y:12.5,texture:1,scale:0.9});
+spriteManager.add({x:6.5,y:10.5,texture:5,scale:0.7});
+spriteManager.add({x:8.5,y:12.5,texture:2,scale:1});
+spriteManager.add({x:10.5,y:12.5,texture:2,scale:1});
+spriteManager.add({x:12.5,y:8.5,texture:3,scale:0.9});
+spriteManager.add({x:16.5,y:8.5,texture:3,scale:0.9});
+spriteManager.add({x:12.5,y:16.5,texture:4,scale:1.1});
+spriteManager.add({x:16.5,y:16.5,texture:4,scale:1.1});
+spriteManager.add({x:14.5,y:10.5,texture:1,scale:0.8});
+spriteManager.add({x:20.5,y:11.5,texture:3,scale:1});
+spriteManager.add({x:20.5,y:13.5,texture:3,scale:1});
+spriteManager.add({x:22.5,y:12.5,texture:5,scale:0.8});
+spriteManager.add({x:22.5,y:11.5,texture:5,scale:0.8});
+spriteManager.add({x:2.5,y:2.5,texture:0,scale:0.85});
+spriteManager.add({x:6.5,y:3.5,texture:1,scale:0.9});
+spriteManager.add({x:4.5,y:6.5,texture:0,scale:0.85});
+spriteManager.add({x:17.5,y:12.5,texture:2,scale:1});
+
+renderer.init(document.getElementById('game-canvas'));
+renderer.updateWorldMap(world);
+overlay.init(document.getElementById('overlay-canvas'));
+minimap.init(document.getElementById('minimap-canvas'));
+input.init(document.getElementById('viewport'));
+visibility.update(player.x,player.y);
+
+document.getElementById('viewport').addEventListener('click',async()=>{if(!audio.initialized) await audio.init();});
+
+let lastFKey=false;
+document.getElementById('tune-ambient').addEventListener('input',e=>{lighting.setAmbient(parseInt(e.target.value)/100);document.getElementById('tune-ambient-val').textContent=e.target.value+'%';});
+document.getElementById('tune-rays').addEventListener('input',e=>{renderer.setRayCount(parseInt(e.target.value));document.getElementById('tune-rays-val').textContent=e.target.value;});
+document.getElementById('tune-viewdist').addEventListener('input',e=>{renderer.setViewDist(parseInt(e.target.value));visibility.viewDistance=parseInt(e.target.value);document.getElementById('tune-viewdist-val').textContent=e.target.value;});
+
+function showMessage(t) { const log=document.getElementById('messages'),msg=document.createElement('div'); msg.className='message'; msg.textContent=t; log.appendChild(msg); setTimeout(()=>msg.remove(),3500); }
+
+function updateLightUI() {
+  const list=document.getElementById('light-list');
+  list.innerHTML=lighting.lights.slice(0,4).map(l=>{
+    const c=`rgb(${l.color[0]*255|0},${l.color[1]*255|0},${l.color[2]*255|0})`;
+    return `<div class="perf-row"><span><span class="light-indicator" style="background:${c}"></span>${l.type==='player'?'Flashlight':'Light '+l.id}</span><span class="perf-value">${(l.currentIntensity*100|0)}%</span></div>`;
+  }).join('');
+}
+
+// ─── GAME LOOP ───
+let lastTime=0,uiTimer=0;
+function gameLoop(time) {
+  profiler.start('frame');
+  const dt=Math.min((time-lastTime)/1000,0.1); lastTime=time;
+  
+  if(input.keys['KeyF']&&!lastFKey) { flashlightOn=!flashlightOn; flashlight.intensity=flashlightOn?1.2:0; showMessage(flashlightOn?'🔦 Flashlight ON':'🔦 Flashlight OFF'); }
+  lastFKey=input.keys['KeyF'];
+  
+  const move=input.getMovement(dt,player.speed*dt);
+  player.angle+=move.turn; while(player.angle<0) player.angle+=Math.PI*2; while(player.angle>=Math.PI*2) player.angle-=Math.PI*2;
+  const fx=Math.cos(player.angle),fy=Math.sin(player.angle),sx=Math.cos(player.angle+Math.PI/2),sy=Math.sin(player.angle+Math.PI/2);
+  const dx=fx*move.forward+sx*move.strafe,dy=fy*move.forward+sy*move.strafe;
+  const isMoving=dx!==0||dy!==0;
+  if(isMoving) { const res=movement.move(player,dx,dy); player.x=res.x; player.y=res.y; }
+  
+  visibility.update(player.x,player.y);
+  profiler.start('lighting'); lighting.update(dt,player.x,player.y,player.angle); profiler.end('lighting');
+  spriteManager.update(player.x,player.y,player.angle,renderer.fov,renderer.maxDepth);
+  audio.update(isMoving);
+  
+  renderer.render(world,visibility,player.x,player.y,player.angle,lighting,spriteManager);
+  overlay.render();
+  minimap.render(world,visibility,player.x,player.y,player.angle,lighting.lights,spriteManager.sprites);
+  
+  profiler.end('frame');
+  
+  uiTimer+=dt;
+  if(uiTimer>0.1) {
+    uiTimer=0;
+    const frame=profiler.getAvg('frame'),fps=frame>0?1000/frame:0;
+    document.getElementById('stat-fps').textContent=fps.toFixed(0);
+    document.getElementById('stat-fps').className='stat-value'+(fps>=55?'':fps>=30?' warn':'');
+    document.getElementById('stat-frame').textContent=frame.toFixed(1)+'ms';
+    document.getElementById('stat-sprites').textContent=renderer.spriteCount+'/'+spriteManager.sprites.length;
+    document.getElementById('stat-sector').textContent=world.getSector(player.x,player.y).name||'--';
+    document.getElementById('perf-frame').textContent=frame.toFixed(2)+'ms';
+    document.getElementById('perf-walls').textContent=profiler.getAvg('walls').toFixed(2)+'ms';
+    document.getElementById('perf-floors').textContent=profiler.getAvg('floors').toFixed(2)+'ms';
+    document.getElementById('perf-sprites').textContent=profiler.getAvg('sprites').toFixed(2)+'ms';
+    document.getElementById('perf-lighting').textContent=profiler.getAvg('lighting').toFixed(2)+'ms';
+    updateLightUI();
+  }
+  
+  requestAnimationFrame(gameLoop);
+}
+
+showMessage('🎯 '+spriteManager.sprites.length+' sprites loaded');
+showMessage('🔦 Press F for flashlight');
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>

@@ -1,0 +1,1418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sector Engine - WebGL2 Textured</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700&display=swap');
+    
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+      background: #0a0a0c;
+      color: #33ff33;
+      font-family: 'Share Tech Mono', monospace;
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    #header {
+      background: linear-gradient(180deg, #1a1a1f 0%, #0d0d10 100%);
+      border-bottom: 2px solid #33ff33;
+      padding: 8px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    #header h1 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1rem;
+      letter-spacing: 3px;
+      text-shadow: 0 0 10px rgba(51, 255, 51, 0.5);
+    }
+    
+    .tag { font-size: 0.5rem; color: #33aa33; margin-left: 8px; letter-spacing: 2px; background: rgba(51,255,51,0.1); padding: 2px 6px; border-radius: 3px; }
+    
+    #stats { display: flex; gap: 16px; font-size: 0.7rem; }
+    .stat { display: flex; flex-direction: column; align-items: center; }
+    .stat-label { color: #555; font-size: 0.55rem; letter-spacing: 1px; }
+    .stat-value { color: #33ff33; }
+    .stat-value.warn { color: #ffaa33; }
+    .stat-value.bad { color: #ff5533; }
+    
+    #main { flex: 1; display: flex; padding: 8px; min-height: 0; gap: 8px; }
+    
+    #viewport {
+      flex: 2;
+      position: relative;
+      border: 2px solid #1a1a1a;
+      border-radius: 4px;
+      overflow: hidden;
+      background: #000;
+    }
+    
+    #game-canvas { width: 100%; height: 100%; display: block; }
+    #overlay-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+    
+    #click-prompt {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.9);
+      border: 1px solid #33ff33;
+      padding: 14px 28px;
+      text-align: center;
+      cursor: pointer;
+      z-index: 10;
+    }
+    #click-prompt:hover { background: rgba(51, 255, 51, 0.1); }
+    #click-prompt.hidden { display: none; }
+    #click-prompt h2 { font-family: 'Orbitron', sans-serif; font-size: 0.85rem; letter-spacing: 2px; }
+    #click-prompt p { font-size: 0.65rem; color: #888; margin-top: 5px; }
+    
+    #sidebar {
+      width: 260px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      overflow-y: auto;
+    }
+    
+    .panel {
+      background: #0f0f12;
+      border: 1px solid #222;
+      border-radius: 4px;
+      padding: 8px;
+    }
+    
+    .panel-title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.6rem;
+      letter-spacing: 2px;
+      color: #444;
+      margin-bottom: 6px;
+    }
+    
+    #minimap-panel { flex: 0 0 auto; height: 180px; display: flex; flex-direction: column; }
+    #minimap-canvas { flex: 1; width: 100%; border: 1px solid #1a1a1a; background: #030305; }
+    
+    .perf-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.65rem;
+      color: #666;
+      margin-bottom: 3px;
+    }
+    .perf-value { color: #33ff33; min-width: 55px; text-align: right; }
+    .perf-value.warn { color: #ffaa33; }
+    .perf-value.bad { color: #ff5533; }
+    
+    .perf-bar {
+      height: 4px;
+      background: #1a1a1a;
+      margin: 2px 0 6px 0;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .perf-bar-fill {
+      height: 100%;
+      background: #33ff33;
+      transition: width 0.1s;
+    }
+    .perf-bar-fill.warn { background: #ffaa33; }
+    .perf-bar-fill.bad { background: #ff5533; }
+    
+    #perf-graph {
+      height: 45px;
+      background: #0a0a0c;
+      border: 1px solid #1a1a1a;
+      margin-top: 6px;
+      position: relative;
+    }
+    #perf-graph canvas { width: 100%; height: 100%; }
+    
+    .slider-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.6rem;
+      color: #888;
+      margin-bottom: 4px;
+    }
+    .slider-row input[type="range"] {
+      width: 70px;
+      height: 4px;
+      -webkit-appearance: none;
+      background: #1a1a1a;
+      border-radius: 2px;
+    }
+    .slider-row input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 10px;
+      height: 10px;
+      background: #33ff33;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+    .slider-value { color: #33ff33; min-width: 35px; text-align: right; }
+    
+    .control-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.6rem;
+      color: #888;
+      margin-bottom: 3px;
+    }
+    .key {
+      background: #1a1a1f;
+      border: 1px solid #2a2a2a;
+      padding: 1px 4px;
+      border-radius: 2px;
+      color: #33ff33;
+      font-size: 0.55rem;
+    }
+    
+    #messages {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      max-width: 280px;
+      z-index: 5;
+    }
+    .message {
+      background: rgba(0,0,0,0.85);
+      border-left: 2px solid #33ff33;
+      padding: 4px 8px;
+      margin-bottom: 2px;
+      font-size: 0.7rem;
+      animation: msgIn 0.2s ease-out, msgOut 0.3s ease-in 2s forwards;
+    }
+    @keyframes msgIn { from { opacity: 0; transform: translateX(-10px); } }
+    @keyframes msgOut { to { opacity: 0; } }
+  </style>
+</head>
+<body>
+  <div id="header">
+    <h1>SECTOR ENGINE <span class="tag">WebGL2 GPU</span></h1>
+    <div id="stats">
+      <div class="stat">
+        <span class="stat-label">FPS</span>
+        <span class="stat-value" id="stat-fps">--</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">FRAME</span>
+        <span class="stat-value" id="stat-frame">--</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">GPU</span>
+        <span class="stat-value" id="stat-gpu">--</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">SECTOR</span>
+        <span class="stat-value" id="stat-sector">--</span>
+      </div>
+    </div>
+  </div>
+  
+  <div id="main">
+    <div id="viewport">
+      <canvas id="game-canvas"></canvas>
+      <canvas id="overlay-canvas"></canvas>
+      <div id="click-prompt">
+        <h2>CLICK TO ENGAGE</h2>
+        <p>Mouse + WASD | WebGL2 Rendering</p>
+      </div>
+      <div id="messages"></div>
+    </div>
+    
+    <div id="sidebar">
+      <div class="panel" id="minimap-panel">
+        <div class="panel-title">TACTICAL MAP</div>
+        <canvas id="minimap-canvas"></canvas>
+      </div>
+      
+      <div class="panel">
+        <div class="panel-title">⚡ PERFORMANCE</div>
+        
+        <div class="perf-row">
+          <span>Frame Total</span>
+          <span class="perf-value" id="perf-frame">--</span>
+        </div>
+        <div class="perf-bar"><div class="perf-bar-fill" id="bar-frame"></div></div>
+        
+        <div class="perf-row">
+          <span>├ CPU Raycast</span>
+          <span class="perf-value" id="perf-raycast">--</span>
+        </div>
+        <div class="perf-row">
+          <span>├ GPU Render</span>
+          <span class="perf-value" id="perf-gpu">--</span>
+        </div>
+        <div class="perf-row">
+          <span>├ Visibility</span>
+          <span class="perf-value" id="perf-visibility">--</span>
+        </div>
+        <div class="perf-row">
+          <span>└ Minimap</span>
+          <span class="perf-value" id="perf-minimap">--</span>
+        </div>
+        
+        <div class="perf-row" style="margin-top: 4px; border-top: 1px solid #1a1a1a; padding-top: 4px;">
+          <span>Draw Calls</span>
+          <span class="perf-value" id="perf-drawcalls">--</span>
+        </div>
+        <div class="perf-row">
+          <span>Triangles</span>
+          <span class="perf-value" id="perf-tris">--</span>
+        </div>
+        <div class="perf-row">
+          <span>Jitter (σ)</span>
+          <span class="perf-value" id="perf-jitter">--</span>
+        </div>
+        
+        <div id="perf-graph">
+          <canvas id="graph-canvas"></canvas>
+        </div>
+      </div>
+      
+      <div class="panel">
+        <div class="panel-title">🎛️ TUNING</div>
+        
+        <div class="slider-row">
+          <span>Ray Count</span>
+          <input type="range" id="tune-rays" min="160" max="640" value="400">
+          <span class="slider-value" id="tune-rays-val">400</span>
+        </div>
+        
+        <div class="slider-row">
+          <span>View Dist</span>
+          <input type="range" id="tune-viewdist" min="10" max="24" value="16">
+          <span class="slider-value" id="tune-viewdist-val">16</span>
+        </div>
+        
+        <div class="slider-row">
+          <span>Tex Scale</span>
+          <input type="range" id="tune-texscale" min="50" max="200" value="100">
+          <span class="slider-value" id="tune-texscale-val">100%</span>
+        </div>
+      </div>
+      
+      <div class="panel">
+        <div class="panel-title">CONTROLS</div>
+        <div class="control-row">
+          <span>Move</span>
+          <span><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span></span>
+        </div>
+        <div class="control-row">
+          <span>Look</span>
+          <span>Mouse / <span class="key">←</span><span class="key">→</span></span>
+        </div>
+        <div class="control-row">
+          <span>Run</span>
+          <span><span class="key">Shift</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================
+    // SECTOR ENGINE - WebGL2 GPU ACCELERATED
+    // CPU: Raycasting, game logic
+    // GPU: Textured wall rendering, fog, lighting
+    // =========================================================
+    
+    // ============ PROFILER ============
+    class Profiler {
+      constructor() {
+        this.timings = {};
+        this.history = {};
+        this.maxHistory = 120;
+      }
+      start(name) { this.timings[name] = performance.now(); }
+      end(name) {
+        if (!this.timings[name]) return 0;
+        const d = performance.now() - this.timings[name];
+        if (!this.history[name]) this.history[name] = [];
+        this.history[name].push(d);
+        if (this.history[name].length > this.maxHistory) this.history[name].shift();
+        return d;
+      }
+      get(name) { const h = this.history[name]; return h && h.length ? h[h.length-1] : 0; }
+      getAvg(name) { const h = this.history[name]; return h && h.length ? h.reduce((a,b)=>a+b,0)/h.length : 0; }
+      getJitter(name) {
+        const h = this.history[name];
+        if (!h || h.length < 2) return 0;
+        const avg = this.getAvg(name);
+        return Math.sqrt(h.reduce((s,v) => s + Math.pow(v-avg,2), 0) / h.length);
+      }
+      getHistory(name) { return this.history[name] || []; }
+    }
+    const profiler = new Profiler();
+    
+    // ============ TEXTURE GENERATOR ============
+    class TextureGenerator {
+      constructor(size = 64) {
+        this.size = size;
+        this.canvas = document.createElement('canvas');
+        this.canvas.width = size;
+        this.canvas.height = size;
+        this.ctx = this.canvas.getContext('2d');
+      }
+      
+      _noise(x, y, seed = 0) {
+        const n = Math.sin(x * 12.9898 + y * 78.233 + seed) * 43758.5453;
+        return n - Math.floor(n);
+      }
+      
+      _fbm(x, y, octaves = 4, seed = 0) {
+        let v = 0, a = 0.5, f = 1;
+        for (let i = 0; i < octaves; i++) {
+          v += a * this._noise(x * f, y * f, seed + i * 100);
+          a *= 0.5; f *= 2;
+        }
+        return v;
+      }
+      
+      generateMetalPanels(baseColor, seed = 0) {
+        const ctx = this.ctx, size = this.size;
+        const [br, bg, bb] = baseColor;
+        
+        const imageData = ctx.createImageData(size, size);
+        const data = imageData.data;
+        
+        for (let y = 0; y < size; y++) {
+          for (let x = 0; x < size; x++) {
+            const i = (y * size + x) * 4;
+            
+            const gridX = x % 16 < 2;
+            const gridY = y % 16 < 2;
+            const isGrid = gridX || gridY;
+            
+            const rivetX = (x % 16 >= 6 && x % 16 <= 9);
+            const rivetY = (y % 16 <= 2 || y % 16 >= 13);
+            const isRivet = rivetX && rivetY;
+            
+            const panelX = x % 16;
+            const panelY = y % 16;
+            const isHighlight = panelX >= 2 && panelX <= 4 && panelY >= 2 && panelY <= 4;
+            
+            const noise = this._fbm(x / 6, y / 6, 3, seed) * 40 - 20;
+            
+            let r = br + noise;
+            let g = bg + noise;
+            let b = bb + noise;
+            
+            if (isGrid) { r -= 50; g -= 50; b -= 45; }
+            else if (isHighlight) { r += 40; g += 40; b += 50; }
+            if (isRivet) { r += 55; g += 55; b += 65; }
+            
+            data[i] = Math.max(0, Math.min(255, r));
+            data[i+1] = Math.max(0, Math.min(255, g));
+            data[i+2] = Math.max(0, Math.min(255, b));
+            data[i+3] = 255;
+          }
+        }
+        
+        ctx.putImageData(imageData, 0, 0);
+        return ctx.getImageData(0, 0, size, size);
+      }
+      
+      generateTechWall(baseColor, seed = 0) {
+        const ctx = this.ctx, size = this.size;
+        const [br, bg, bb] = baseColor;
+        
+        const imageData = ctx.createImageData(size, size);
+        const data = imageData.data;
+        
+        for (let y = 0; y < size; y++) {
+          for (let x = 0; x < size; x++) {
+            const i = (y * size + x) * 4;
+            
+            let r = br * 0.5, g = bg * 0.5, b = bb * 0.5;
+            
+            const lineH = y % 10 === 0 || y % 10 === 1;
+            const lineV = x % 14 === 0 || x % 14 === 1;
+            const nodeX = x % 14 < 4;
+            const nodeY = y % 10 < 4;
+            const isNode = nodeX && nodeY;
+            
+            const traceH = y % 10 === 5 && this._noise(Math.floor(x/7), y, seed) > 0.4;
+            const traceV = x % 14 === 7 && this._noise(x, Math.floor(y/5), seed+50) > 0.4;
+            
+            if (lineH || lineV) { r += 35; g += 40; b += 55; }
+            if (isNode) { g += 70; b += 95; }
+            if (traceH || traceV) { r += 30; g += 100; b += 130; }
+            
+            const noise = this._noise(x, y, seed) * 12 - 6;
+            
+            data[i] = Math.max(0, Math.min(255, r + noise));
+            data[i+1] = Math.max(0, Math.min(255, g + noise));
+            data[i+2] = Math.max(0, Math.min(255, b + noise));
+            data[i+3] = 255;
+          }
+        }
+        
+        ctx.putImageData(imageData, 0, 0);
+        return ctx.getImageData(0, 0, size, size);
+      }
+      
+      generateConcrete(baseColor, seed = 0) {
+        const ctx = this.ctx, size = this.size;
+        const [br, bg, bb] = baseColor;
+        
+        const imageData = ctx.createImageData(size, size);
+        const data = imageData.data;
+        
+        for (let y = 0; y < size; y++) {
+          for (let x = 0; x < size; x++) {
+            const i = (y * size + x) * 4;
+            
+            const noise1 = this._fbm(x/4, y/4, 4, seed) * 70 - 35;
+            const noise2 = this._fbm(x/12, y/12, 2, seed+100) * 35 - 17;
+            const cracks = this._noise(x/3, y/3, seed+200) > 0.92 ? -45 : 0;
+            
+            const total = noise1 + noise2 + cracks;
+            
+            data[i] = Math.max(0, Math.min(255, br + total));
+            data[i+1] = Math.max(0, Math.min(255, bg + total));
+            data[i+2] = Math.max(0, Math.min(255, bb + total));
+            data[i+3] = 255;
+          }
+        }
+        
+        ctx.putImageData(imageData, 0, 0);
+        return ctx.getImageData(0, 0, size, size);
+      }
+      
+      generateGrating(baseColor, seed = 0) {
+        const ctx = this.ctx, size = this.size;
+        const [br, bg, bb] = baseColor;
+        
+        const imageData = ctx.createImageData(size, size);
+        const data = imageData.data;
+        
+        for (let y = 0; y < size; y++) {
+          for (let x = 0; x < size; x++) {
+            const i = (y * size + x) * 4;
+            
+            const cellX = x % 8;
+            const cellY = y % 8;
+            const inDiamond = Math.abs(cellX - 3.5) + Math.abs(cellY - 3.5) < 3;
+            
+            if (inDiamond) {
+              data[i] = 12; data[i+1] = 15; data[i+2] = 20;
+            } else {
+              const highlight = (cellX < 3.5 || cellY < 3.5);
+              data[i] = highlight ? br + 45 : br;
+              data[i+1] = highlight ? bg + 45 : bg;
+              data[i+2] = highlight ? bb + 55 : bb;
+              
+              const noise = this._noise(x, y, seed) * 18 - 9;
+              data[i] = Math.max(0, Math.min(255, data[i] + noise));
+              data[i+1] = Math.max(0, Math.min(255, data[i+1] + noise));
+              data[i+2] = Math.max(0, Math.min(255, data[i+2] + noise));
+            }
+            data[i+3] = 255;
+          }
+        }
+        
+        ctx.putImageData(imageData, 0, 0);
+        return ctx.getImageData(0, 0, size, size);
+      }
+      
+      generateBrick(baseColor, seed = 0) {
+        const ctx = this.ctx, size = this.size;
+        const [br, bg, bb] = baseColor;
+        
+        const imageData = ctx.createImageData(size, size);
+        const data = imageData.data;
+        
+        const brickH = 8, brickW = 16;
+        
+        for (let y = 0; y < size; y++) {
+          for (let x = 0; x < size; x++) {
+            const i = (y * size + x) * 4;
+            
+            const row = Math.floor(y / brickH);
+            const offsetX = (row % 2) * (brickW / 2);
+            const brickX = (x + offsetX) % brickW;
+            const brickY = y % brickH;
+            const isMortar = brickX < 2 || brickY < 2;
+            
+            if (isMortar) {
+              const mn = this._noise(x, y, seed) * 18;
+              data[i] = 55 + mn; data[i+1] = 52 + mn; data[i+2] = 48 + mn;
+            } else {
+              const brickId = Math.floor((x + offsetX) / brickW) + row * 1000;
+              const brickVar = (this._noise(brickId, 0, seed) - 0.5) * 60;
+              const surfaceNoise = this._noise(x*2, y*2, seed+300) * 28 - 14;
+              
+              data[i] = Math.max(0, Math.min(255, br + brickVar + surfaceNoise));
+              data[i+1] = Math.max(0, Math.min(255, bg + brickVar*0.8 + surfaceNoise));
+              data[i+2] = Math.max(0, Math.min(255, bb + brickVar*0.6 + surfaceNoise));
+            }
+            data[i+3] = 255;
+          }
+        }
+        
+        ctx.putImageData(imageData, 0, 0);
+        return ctx.getImageData(0, 0, size, size);
+      }
+      
+      generateCrate(baseColor, seed = 0) {
+        const ctx = this.ctx, size = this.size;
+        const [br, bg, bb] = baseColor;
+        
+        const imageData = ctx.createImageData(size, size);
+        const data = imageData.data;
+        
+        for (let y = 0; y < size; y++) {
+          for (let x = 0; x < size; x++) {
+            const i = (y * size + x) * 4;
+            
+            const grain = Math.sin(y * 0.6 + this._noise(x/15, y/4, seed) * 8) * 22;
+            const border = x < 6 || x >= size-6 || y < 6 || y >= size-6;
+            const innerBorder = (x >= 6 && x < 10) || (x >= size-10 && x < size-6) ||
+                               (y >= 6 && y < 10) || (y >= size-10 && y < size-6);
+            
+            const diag1 = Math.abs((x - size/2) - (y - size/2)) < 4;
+            const diag2 = Math.abs((x - size/2) + (y - size/2)) < 4;
+            const crossBrace = (diag1 || diag2) && !border;
+            const plankLine = y % 12 < 1;
+            
+            let r = br + grain, g = bg + grain*0.9, b = bb + grain*0.7;
+            
+            if (border) { r += 40; g += 35; b += 25; }
+            if (innerBorder && border) { r -= 30; g -= 26; b -= 20; }
+            if (crossBrace) { r += 35; g += 30; b += 22; }
+            if (plankLine && !border) { r -= 35; g -= 32; b -= 25; }
+            
+            const noise = this._noise(x, y, seed) * 20 - 10;
+            
+            data[i] = Math.max(0, Math.min(255, r + noise));
+            data[i+1] = Math.max(0, Math.min(255, g + noise*0.9));
+            data[i+2] = Math.max(0, Math.min(255, b + noise*0.7));
+            data[i+3] = 255;
+          }
+        }
+        
+        ctx.putImageData(imageData, 0, 0);
+        return ctx.getImageData(0, 0, size, size);
+      }
+      
+      generatePillar(baseColor, seed = 0) {
+        const ctx = this.ctx, size = this.size;
+        const [br, bg, bb] = baseColor;
+        
+        const imageData = ctx.createImageData(size, size);
+        const data = imageData.data;
+        
+        for (let y = 0; y < size; y++) {
+          for (let x = 0; x < size; x++) {
+            const i = (y * size + x) * 4;
+            
+            const streak = this._noise(x/4, 0, seed) * 28 - 14;
+            const noise = this._fbm(x/8, y/8, 3, seed+100) * 22 - 11;
+            const band = (y % 32 < 2) ? -25 : 0;
+            
+            const total = streak + noise + band;
+            
+            data[i] = Math.max(0, Math.min(255, br + total));
+            data[i+1] = Math.max(0, Math.min(255, bg + total));
+            data[i+2] = Math.max(0, Math.min(255, bb + total));
+            data[i+3] = 255;
+          }
+        }
+        
+        ctx.putImageData(imageData, 0, 0);
+        return ctx.getImageData(0, 0, size, size);
+      }
+    }
+    
+    // ============ WEBGL2 RENDERER ============
+    class WebGL2Renderer {
+      constructor(config = {}) {
+        this.rayCount = config.rayCount || 400;
+        this.fov = config.fov || Math.PI * 0.6;
+        this.maxDepth = config.maxDepth || 16;
+        this.texScale = 1.0;
+        
+        this.gl = null;
+        this.program = null;
+        this.textureAtlas = null;
+        this.texGen = new TextureGenerator(64);
+        
+        // Stats
+        this.drawCalls = 0;
+        this.triangleCount = 0;
+      }
+      
+      init(canvas) {
+        this.canvas = canvas;
+        this.gl = canvas.getContext('webgl2', { antialias: false, alpha: false });
+        
+        if (!this.gl) {
+          console.error('WebGL2 not supported');
+          return false;
+        }
+        
+        this._initShaders();
+        this._initBuffers();
+        this._initTextures();
+        this.resize();
+        
+        window.addEventListener('resize', () => this.resize());
+        return true;
+      }
+      
+      resize() {
+        const c = this.canvas.parentElement;
+        this.width = c.clientWidth;
+        this.height = c.clientHeight;
+        this.canvas.width = this.width;
+        this.canvas.height = this.height;
+        this.gl.viewport(0, 0, this.width, this.height);
+      }
+      
+      _initShaders() {
+        const gl = this.gl;
+        
+        // Vertex shader - positions wall columns
+        const vsSource = `#version 300 es
+          in vec2 aPosition;
+          in vec2 aTexCoord;
+          in float aTexIndex;
+          in float aShade;
+          in float aFog;
+          in float aSide;
+          
+          out vec2 vTexCoord;
+          flat out int vTexIndex;
+          out float vShade;
+          out float vFog;
+          out float vSide;
+          
+          void main() {
+            gl_Position = vec4(aPosition, 0.0, 1.0);
+            vTexCoord = aTexCoord;
+            vTexIndex = int(aTexIndex);
+            vShade = aShade;
+            vFog = aFog;
+            vSide = aSide;
+          }
+        `;
+        
+        // Fragment shader - samples textures, applies lighting and fog
+        const fsSource = `#version 300 es
+          precision highp float;
+          precision highp sampler2DArray;
+          
+          in vec2 vTexCoord;
+          flat in int vTexIndex;
+          in float vShade;
+          in float vFog;
+          in float vSide;
+          
+          uniform sampler2DArray uTextureAtlas;
+          uniform float uTexScale;
+          
+          out vec4 fragColor;
+          
+          void main() {
+            vec2 tc = vTexCoord * uTexScale;
+            tc = fract(tc); // Wrap texture coords
+            
+            vec3 texColor = texture(uTextureAtlas, vec3(tc, float(vTexIndex))).rgb;
+            
+            // Side shading (N/S walls darker)
+            float sideMult = mix(1.0, 0.75, vSide);
+            texColor *= sideMult;
+            
+            // Distance shading
+            texColor *= vShade;
+            
+            // Fog
+            vec3 fogColor = vec3(0.07, 0.085, 0.11);
+            texColor = mix(texColor, fogColor, vFog);
+            
+            fragColor = vec4(texColor, 1.0);
+          }
+        `;
+        
+        const vs = this._compileShader(gl.VERTEX_SHADER, vsSource);
+        const fs = this._compileShader(gl.FRAGMENT_SHADER, fsSource);
+        
+        this.program = gl.createProgram();
+        gl.attachShader(this.program, vs);
+        gl.attachShader(this.program, fs);
+        gl.linkProgram(this.program);
+        
+        if (!gl.getProgramParameter(this.program, gl.LINK_STATUS)) {
+          console.error('Shader link error:', gl.getProgramInfoLog(this.program));
+        }
+        
+        // Get locations
+        this.attribs = {
+          position: gl.getAttribLocation(this.program, 'aPosition'),
+          texCoord: gl.getAttribLocation(this.program, 'aTexCoord'),
+          texIndex: gl.getAttribLocation(this.program, 'aTexIndex'),
+          shade: gl.getAttribLocation(this.program, 'aShade'),
+          fog: gl.getAttribLocation(this.program, 'aFog'),
+          side: gl.getAttribLocation(this.program, 'aSide')
+        };
+        
+        this.uniforms = {
+          textureAtlas: gl.getUniformLocation(this.program, 'uTextureAtlas'),
+          texScale: gl.getUniformLocation(this.program, 'uTexScale')
+        };
+      }
+      
+      _compileShader(type, source) {
+        const gl = this.gl;
+        const shader = gl.createShader(type);
+        gl.shaderSource(shader, source);
+        gl.compileShader(shader);
+        
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+          console.error('Shader compile error:', gl.getShaderInfoLog(shader));
+        }
+        return shader;
+      }
+      
+      _initBuffers() {
+        const gl = this.gl;
+        
+        // Create VAO
+        this.vao = gl.createVertexArray();
+        gl.bindVertexArray(this.vao);
+        
+        // Vertex buffer - will be filled each frame
+        this.vertexBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+        
+        // Vertex format: x, y, u, v, texIndex, shade, fog, side
+        const stride = 8 * 4; // 8 floats per vertex
+        
+        gl.enableVertexAttribArray(this.attribs.position);
+        gl.vertexAttribPointer(this.attribs.position, 2, gl.FLOAT, false, stride, 0);
+        
+        gl.enableVertexAttribArray(this.attribs.texCoord);
+        gl.vertexAttribPointer(this.attribs.texCoord, 2, gl.FLOAT, false, stride, 8);
+        
+        gl.enableVertexAttribArray(this.attribs.texIndex);
+        gl.vertexAttribPointer(this.attribs.texIndex, 1, gl.FLOAT, false, stride, 16);
+        
+        gl.enableVertexAttribArray(this.attribs.shade);
+        gl.vertexAttribPointer(this.attribs.shade, 1, gl.FLOAT, false, stride, 20);
+        
+        gl.enableVertexAttribArray(this.attribs.fog);
+        gl.vertexAttribPointer(this.attribs.fog, 1, gl.FLOAT, false, stride, 24);
+        
+        gl.enableVertexAttribArray(this.attribs.side);
+        gl.vertexAttribPointer(this.attribs.side, 1, gl.FLOAT, false, stride, 28);
+        
+        gl.bindVertexArray(null);
+        
+        // Allocate vertex data array
+        this.maxWalls = 800;
+        this.vertexData = new Float32Array(this.maxWalls * 6 * 8); // 6 verts per wall, 8 floats per vert
+      }
+      
+      _initTextures() {
+        const gl = this.gl;
+        const texGen = this.texGen;
+        const size = 64;
+        
+        // Generate all textures
+        const textures = [
+          texGen.generateMetalPanels([120, 125, 135], 42),      // 0: metal
+          texGen.generateMetalPanels([150, 135, 95], 43),       // 1: metal_gold
+          texGen.generateTechWall([70, 85, 110], 44),           // 2: tech
+          texGen.generateConcrete([100, 100, 105], 45),         // 3: concrete
+          texGen.generateConcrete([85, 110, 90], 46),           // 4: concrete_green
+          texGen.generateBrick([145, 95, 75], 47),              // 5: brick
+          texGen.generateGrating([110, 115, 125], 48),          // 6: grating
+          texGen.generateCrate([160, 130, 85], 49),             // 7: crate
+          texGen.generatePillar([150, 148, 145], 50)            // 8: pillar
+        ];
+        
+        // Create texture array
+        this.textureAtlas = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.textureAtlas);
+        
+        gl.texImage3D(
+          gl.TEXTURE_2D_ARRAY, 0, gl.RGBA,
+          size, size, textures.length,
+          0, gl.RGBA, gl.UNSIGNED_BYTE, null
+        );
+        
+        // Upload each texture layer
+        for (let i = 0; i < textures.length; i++) {
+          gl.texSubImage3D(
+            gl.TEXTURE_2D_ARRAY, 0,
+            0, 0, i,
+            size, size, 1,
+            gl.RGBA, gl.UNSIGNED_BYTE,
+            textures[i].data
+          );
+        }
+        
+        gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.REPEAT);
+        gl.generateMipmap(gl.TEXTURE_2D_ARRAY);
+        
+        // Texture index mapping
+        this.texIndexMap = {
+          'HANGAR': 0,
+          'PLATFORM': 1,
+          'TERMINAL BAY': 2,
+          'VOID': 3,
+          'OPS CENTER': 4,
+          'EXTERIOR': 5,
+          'CORRIDOR': 6,
+          'CRATE': 7,
+          'PILLAR': 8
+        };
+      }
+      
+      setRayCount(n) { this.rayCount = n; }
+      setViewDist(d) { this.maxDepth = d; }
+      setTexScale(s) { this.texScale = s / 100; }
+      
+      render(world, visibility, px, py, angle) {
+        profiler.start('raycast');
+        
+        const gl = this.gl;
+        const w = this.width;
+        const h = this.height;
+        
+        // Clear with sky/floor gradient approximation
+        gl.clearColor(0.08, 0.09, 0.12, 1.0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        
+        // Build wall geometry from raycasts
+        let vertexCount = 0;
+        const data = this.vertexData;
+        const colWidth = 2.0 / this.rayCount; // In clip space (-1 to 1)
+        
+        for (let i = 0; i < this.rayCount && vertexCount < this.maxWalls * 6; i++) {
+          const rayAngle = angle + ((i / this.rayCount) - 0.5) * this.fov;
+          const hit = this._castRay(world, visibility, px, py, angle, rayAngle);
+          
+          if (hit) {
+            const x0 = -1 + i * colWidth;
+            const x1 = x0 + colWidth;
+            const y0 = hit.wallTop;
+            const y1 = hit.wallBottom;
+            
+            const u = hit.texU;
+            const texIdx = hit.texIndex;
+            const shade = hit.shade;
+            const fog = hit.fog;
+            const side = hit.isNS ? 1.0 : 0.0;
+            
+            // Two triangles per wall column (6 vertices)
+            const vi = vertexCount * 8;
+            
+            // Triangle 1
+            data[vi]    = x0; data[vi+1]  = y0; data[vi+2]  = u; data[vi+3]  = 0; data[vi+4]  = texIdx; data[vi+5]  = shade; data[vi+6]  = fog; data[vi+7]  = side;
+            data[vi+8]  = x1; data[vi+9]  = y0; data[vi+10] = u; data[vi+11] = 0; data[vi+12] = texIdx; data[vi+13] = shade; data[vi+14] = fog; data[vi+15] = side;
+            data[vi+16] = x0; data[vi+17] = y1; data[vi+18] = u; data[vi+19] = 1; data[vi+20] = texIdx; data[vi+21] = shade; data[vi+22] = fog; data[vi+23] = side;
+            
+            // Triangle 2
+            data[vi+24] = x1; data[vi+25] = y0; data[vi+26] = u; data[vi+27] = 0; data[vi+28] = texIdx; data[vi+29] = shade; data[vi+30] = fog; data[vi+31] = side;
+            data[vi+32] = x1; data[vi+33] = y1; data[vi+34] = u; data[vi+35] = 1; data[vi+36] = texIdx; data[vi+37] = shade; data[vi+38] = fog; data[vi+39] = side;
+            data[vi+40] = x0; data[vi+41] = y1; data[vi+42] = u; data[vi+43] = 1; data[vi+44] = texIdx; data[vi+45] = shade; data[vi+46] = fog; data[vi+47] = side;
+            
+            vertexCount += 6;
+          }
+        }
+        
+        profiler.end('raycast');
+        profiler.start('gpu');
+        
+        if (vertexCount > 0) {
+          gl.useProgram(this.program);
+          gl.bindVertexArray(this.vao);
+          
+          // Upload vertex data
+          gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+          gl.bufferData(gl.ARRAY_BUFFER, data.subarray(0, vertexCount * 8), gl.DYNAMIC_DRAW);
+          
+          // Bind texture atlas
+          gl.activeTexture(gl.TEXTURE0);
+          gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.textureAtlas);
+          gl.uniform1i(this.uniforms.textureAtlas, 0);
+          gl.uniform1f(this.uniforms.texScale, this.texScale);
+          
+          // Draw!
+          gl.drawArrays(gl.TRIANGLES, 0, vertexCount);
+          
+          this.drawCalls = 1;
+          this.triangleCount = vertexCount / 3;
+        }
+        
+        profiler.end('gpu');
+      }
+      
+      _castRay(world, vis, px, py, viewAngle, rayAngle) {
+        const step = 0.02;
+        const cosA = Math.cos(rayAngle);
+        const sinA = Math.sin(rayAngle);
+        const cosCorr = Math.cos(rayAngle - viewAngle);
+        
+        let x = px, y = py, dist = 0;
+        
+        while (dist < this.maxDepth) {
+          x += cosA * step;
+          y += sinA * step;
+          dist += step;
+          
+          const gx = Math.floor(x);
+          const gy = Math.floor(y);
+          const sector = world.getSector(x, y);
+          
+          if (!sector.walkable) {
+            const visible = vis.isVisible(gx, gy);
+            const discovered = vis.isDiscovered(gx, gy);
+            if (!visible && !discovered) return null;
+            
+            const corrDist = dist * cosCorr;
+            const wallHeight = Math.min(2.0, 1.7 / corrDist);
+            
+            // Wall position in clip space
+            const wallTop = wallHeight / 2;
+            const wallBottom = -wallHeight / 2;
+            
+            // Texture U coordinate
+            const hitX = x - gx;
+            const hitY = y - gy;
+            const isNS = hitX < 0.03 || hitX > 0.97;
+            const texU = isNS ? hitY : hitX;
+            
+            // Texture index
+            const texIndex = this.texIndexMap[sector.name] || 3;
+            
+            // Shading
+            const ambient = 0.3;
+            const shade = Math.max(ambient, 1.0 - corrDist * 0.055);
+            
+            // Fog
+            const fog = Math.max(0, Math.min(1, (corrDist - 5) * 0.08));
+            
+            // Dim if discovered but not visible
+            const finalShade = (!visible && discovered) ? shade * 0.5 : shade;
+            
+            return {
+              wallTop,
+              wallBottom,
+              texU,
+              texIndex,
+              shade: finalShade,
+              fog,
+              isNS
+            };
+          }
+        }
+        
+        return null;
+      }
+    }
+    
+    // ============ OVERLAY RENDERER (crosshair, vignette) ============
+    class OverlayRenderer {
+      constructor() {}
+      
+      init(canvas) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+      }
+      
+      resize() {
+        const c = this.canvas.parentElement;
+        this.width = c.clientWidth;
+        this.height = c.clientHeight;
+        this.canvas.width = this.width;
+        this.canvas.height = this.height;
+      }
+      
+      render() {
+        const ctx = this.ctx;
+        const w = this.width, h = this.height;
+        
+        ctx.clearRect(0, 0, w, h);
+        
+        // Vignette
+        const vig = ctx.createRadialGradient(w/2, h/2, h*0.2, w/2, h/2, h*0.95);
+        vig.addColorStop(0, 'rgba(0,0,0,0)');
+        vig.addColorStop(1, 'rgba(0,0,0,0.6)');
+        ctx.fillStyle = vig;
+        ctx.fillRect(0, 0, w, h);
+        
+        // Crosshair
+        const cx = w/2, cy = h/2;
+        ctx.strokeStyle = 'rgba(51,255,51,0.8)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(cx - 14, cy); ctx.lineTo(cx - 5, cy);
+        ctx.moveTo(cx + 5, cy); ctx.lineTo(cx + 14, cy);
+        ctx.moveTo(cx, cy - 14); ctx.lineTo(cx, cy - 5);
+        ctx.moveTo(cx, cy + 5); ctx.lineTo(cx, cy + 14);
+        ctx.stroke();
+        
+        ctx.fillStyle = 'rgba(51,255,51,0.9)';
+        ctx.beginPath();
+        ctx.arc(cx, cy, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    
+    // ============ ENGINE CORE ============
+    class World {
+      constructor(cfg = {}) {
+        this.width = cfg.width || 32;
+        this.height = cfg.height || 32;
+        this.grid = Array(this.height).fill(null).map(() => Array(this.width).fill('void'));
+        this.sectorTypes = new Map();
+        this.sectorTypes.set('void', { floor: -10, ceiling: -10, walkable: false, floorColor: [20,20,25], wallColor: [40,40,50], name: 'VOID' });
+      }
+      registerSectorTypes(types) { for (const [k,v] of Object.entries(types)) this.sectorTypes.set(k, v); }
+      getSector(x, y) {
+        const gx = Math.floor(x), gy = Math.floor(y);
+        if (gx < 0 || gx >= this.width || gy < 0 || gy >= this.height) return this.sectorTypes.get('void');
+        return this.sectorTypes.get(this.grid[gy][gx]) || this.sectorTypes.get('void');
+      }
+      fillRect(x1, y1, x2, y2, type) {
+        for (let y = Math.min(y1,y2); y <= Math.max(y1,y2); y++)
+          for (let x = Math.min(x1,x2); x <= Math.max(x1,x2); x++)
+            if (x >= 0 && x < this.width && y >= 0 && y < this.height) this.grid[y][x] = type;
+      }
+      countWalkable() {
+        let c = 0;
+        for (let y = 0; y < this.height; y++) for (let x = 0; x < this.width; x++) if (this.getSector(x,y).walkable) c++;
+        return c;
+      }
+    }
+    
+    class Visibility {
+      constructor(world, cfg = {}) {
+        this.world = world;
+        this.viewDistance = cfg.viewDistance || 16;
+        this.discovered = new Set();
+        this.currentlyVisible = new Set();
+        this.totalWalkable = world.countWalkable();
+        this.lastCell = null;
+      }
+      update(x, y) {
+        const cell = `${Math.floor(x)},${Math.floor(y)}`;
+        if (cell === this.lastCell) return false;
+        this.lastCell = cell;
+        
+        profiler.start('visibility');
+        this.currentlyVisible.clear();
+        for (let i = 0; i < 180; i++) {
+          const angle = (i / 180) * Math.PI * 2;
+          let rx = x, ry = y;
+          const dx = Math.cos(angle) * 0.4, dy = Math.sin(angle) * 0.4;
+          for (let d = 0; d < this.viewDistance; d += 0.4) {
+            rx += dx; ry += dy;
+            const key = `${Math.floor(rx)},${Math.floor(ry)}`;
+            this.currentlyVisible.add(key);
+            const s = this.world.getSector(rx, ry);
+            if (s.walkable) this.discovered.add(key);
+            if (!s.walkable) break;
+          }
+        }
+        profiler.end('visibility');
+        return true;
+      }
+      isVisible(gx, gy) { return this.currentlyVisible.has(`${gx},${gy}`); }
+      isDiscovered(gx, gy) { return this.discovered.has(`${gx},${gy}`); }
+      getDiscoveryPercent() {
+        let c = 0;
+        for (const k of this.discovered) { const [x,y] = k.split(',').map(Number); if (this.world.getSector(x,y).walkable) c++; }
+        return Math.round((c / this.totalWalkable) * 100);
+      }
+    }
+    
+    class Movement {
+      constructor(world) { this.world = world; }
+      move(e, dx, dy) {
+        const r = e.radius || 0.2;
+        const nx = e.x + dx, ny = e.y + dy;
+        if (this._can(nx, ny, r)) return { x: nx, y: ny };
+        if (this._can(nx, e.y, r)) return { x: nx, y: e.y };
+        if (this._can(e.x, ny, r)) return { x: e.x, y: ny };
+        return { x: e.x, y: e.y };
+      }
+      _can(x, y, r) {
+        for (const [px, py] of [[x,y], [x-r,y-r], [x+r,y-r], [x-r,y+r], [x+r,y+r]])
+          if (!this.world.getSector(px, py).walkable) return false;
+        return true;
+      }
+    }
+    
+    class Input {
+      constructor() { this.keys = {}; this.mouseDX = 0; this.locked = false; }
+      init(target) {
+        window.addEventListener('keydown', e => { this.keys[e.code] = true; if (['KeyW','KeyA','KeyS','KeyD','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault(); });
+        window.addEventListener('keyup', e => this.keys[e.code] = false);
+        document.addEventListener('mousemove', e => { if (this.locked) this.mouseDX += e.movementX; });
+        document.addEventListener('pointerlockchange', () => {
+          this.locked = document.pointerLockElement === target;
+          document.getElementById('click-prompt').classList.toggle('hidden', this.locked);
+        });
+        target.addEventListener('click', () => { if (!this.locked) target.requestPointerLock(); });
+      }
+      getMovement(dt, speed) {
+        let f = 0, s = 0, t = 0;
+        if (this.keys['KeyW'] || this.keys['ArrowUp']) f += speed;
+        if (this.keys['KeyS'] || this.keys['ArrowDown']) f -= speed;
+        if (this.keys['KeyA']) s -= speed;
+        if (this.keys['KeyD']) s += speed;
+        if (this.keys['ArrowLeft']) t -= 2.2 * dt;
+        if (this.keys['ArrowRight']) t += 2.2 * dt;
+        if (this.keys['ShiftLeft'] || this.keys['ShiftRight']) { f *= 1.7; s *= 1.7; }
+        t += this.mouseDX * 0.002;
+        this.mouseDX = 0;
+        return { forward: f, strafe: s, turn: t };
+      }
+    }
+    
+    // ============ MINIMAP ============
+    class Minimap {
+      constructor(cfg = {}) { this.fov = cfg.fov || Math.PI * 0.6; this.viewDist = cfg.viewDistance || 16; }
+      init(canvas) { this.canvas = canvas; this.ctx = canvas.getContext('2d'); this.resize(); window.addEventListener('resize', () => this.resize()); }
+      resize() { const c = this.canvas.parentElement; const size = Math.min(c.clientWidth - 16, c.clientHeight - 28); this.canvas.width = size; this.canvas.height = size; }
+      render(world, vis, px, py, angle) {
+        profiler.start('minimap');
+        const ctx = this.ctx, w = this.canvas.width, h = this.canvas.height;
+        const cw = w / world.width, ch = h / world.height;
+        ctx.fillStyle = '#030305'; ctx.fillRect(0, 0, w, h);
+        for (let gy = 0; gy < world.height; gy++) {
+          for (let gx = 0; gx < world.width; gx++) {
+            const sec = world.getSector(gx, gy);
+            const v = vis.isVisible(gx, gy), d = vis.isDiscovered(gx, gy);
+            let col;
+            if (!d && !v) col = '#050508';
+            else if (!sec.walkable) col = v ? '#3a3a45' : '#1a1a22';
+            else if (v) { const c = sec.floorColor; col = `rgb(${c[0]*0.75|0},${c[1]*0.75|0},${c[2]*0.75|0})`; }
+            else col = '#151518';
+            ctx.fillStyle = col;
+            ctx.fillRect(gx * cw, gy * ch, cw + 0.5, ch + 0.5);
+          }
+        }
+        const mx = px * cw, my = py * ch, cl = this.viewDist * cw;
+        ctx.fillStyle = 'rgba(51,255,51,0.1)';
+        ctx.beginPath(); ctx.moveTo(mx, my);
+        ctx.lineTo(mx + Math.cos(angle - this.fov/2) * cl, my + Math.sin(angle - this.fov/2) * cl);
+        ctx.arc(mx, my, cl, angle - this.fov/2, angle + this.fov/2);
+        ctx.fill();
+        ctx.fillStyle = '#33ff33'; ctx.shadowColor = '#33ff33'; ctx.shadowBlur = 5;
+        ctx.beginPath(); ctx.arc(mx, my, 3, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
+        ctx.strokeStyle = '#33ff33'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(mx + Math.cos(angle) * 8, my + Math.sin(angle) * 8); ctx.stroke();
+        profiler.end('minimap');
+      }
+    }
+    
+    // ============ LEVEL DATA ============
+    const SECTOR_TYPES = {
+      hangar: { floor: 0, ceiling: 1.4, floorColor: [80, 82, 88], wallColor: [110, 115, 125], walkable: true, name: 'HANGAR' },
+      hangar_platform: { floor: 0.2, ceiling: 1.4, floorColor: [120, 110, 85], wallColor: [140, 130, 100], walkable: true, name: 'PLATFORM' },
+      corridor: { floor: 0, ceiling: 1.1, floorColor: [75, 78, 85], wallColor: [100, 105, 115], walkable: true, name: 'CORRIDOR' },
+      zigzag: { floor: 0.05, ceiling: 1.5, floorColor: [70, 90, 78], wallColor: [95, 120, 105], walkable: true, name: 'OPS CENTER' },
+      computer: { floor: 0.1, ceiling: 1.2, floorColor: [75, 80, 100], wallColor: [100, 108, 130], walkable: true, name: 'TERMINAL BAY' },
+      outdoor: { floor: -0.1, ceiling: 4.0, floorColor: [100, 95, 80], wallColor: [130, 125, 110], walkable: true, name: 'EXTERIOR' },
+      pillar: { floor: 0, ceiling: 1.5, floorColor: [130, 125, 118], wallColor: [150, 145, 138], walkable: false, name: 'PILLAR' },
+      crate: { floor: 0.5, ceiling: 1.2, floorColor: [130, 105, 70], wallColor: [150, 125, 85], walkable: false, name: 'CRATE' }
+    };
+    
+    const REGIONS = [
+      { type: 'hangar', x1: 1, y1: 9, x2: 7, y2: 15 },
+      { type: 'hangar_platform', x1: 4, y1: 11, x2: 6, y2: 13 },
+      { type: 'corridor', x1: 7, y1: 11, x2: 11, y2: 13 },
+      { type: 'corridor', x1: 17, y1: 11, x2: 19, y2: 13 },
+      { type: 'zigzag', x1: 11, y1: 7, x2: 17, y2: 17 },
+      { type: 'pillar', x1: 13, y1: 9, x2: 13, y2: 9 },
+      { type: 'pillar', x1: 15, y1: 9, x2: 15, y2: 9 },
+      { type: 'pillar', x1: 13, y1: 15, x2: 13, y2: 15 },
+      { type: 'pillar', x1: 15, y1: 15, x2: 15, y2: 15 },
+      { type: 'computer', x1: 19, y1: 9, x2: 23, y2: 15 },
+      { type: 'crate', x1: 21, y1: 10, x2: 22, y2: 10 },
+      { type: 'crate', x1: 21, y1: 14, x2: 21, y2: 14 },
+      { type: 'outdoor', x1: 1, y1: 1, x2: 7, y2: 7 },
+      { type: 'hangar', x1: 3, y1: 8, x2: 5, y2: 8 }
+    ];
+    
+    // ============ SETUP ============
+    const world = new World({ width: 24, height: 24 });
+    world.registerSectorTypes(SECTOR_TYPES);
+    REGIONS.forEach(r => world.fillRect(r.x1, r.y1, r.x2, r.y2, r.type));
+    
+    const visibility = new Visibility(world, { viewDistance: 16 });
+    const movement = new Movement(world);
+    const input = new Input();
+    const renderer = new WebGL2Renderer({ rayCount: 400, maxDepth: 16 });
+    const overlay = new OverlayRenderer();
+    const minimap = new Minimap({ viewDistance: 16 });
+    const player = { x: 3.5, y: 12.5, angle: 0, radius: 0.2, speed: 3.0 };
+    
+    // Initialize
+    if (!renderer.init(document.getElementById('game-canvas'))) {
+      alert('WebGL2 not supported! Try a modern browser.');
+    }
+    overlay.init(document.getElementById('overlay-canvas'));
+    minimap.init(document.getElementById('minimap-canvas'));
+    input.init(document.getElementById('viewport'));
+    visibility.update(player.x, player.y);
+    
+    // Perf graph
+    const graphCanvas = document.getElementById('graph-canvas');
+    const graphCtx = graphCanvas.getContext('2d');
+    
+    function drawPerfGraph() {
+      const w = graphCanvas.width = graphCanvas.parentElement.clientWidth;
+      const h = graphCanvas.height = 45;
+      const history = profiler.getHistory('frame');
+      
+      graphCtx.fillStyle = '#0a0a0c';
+      graphCtx.fillRect(0, 0, w, h);
+      
+      graphCtx.strokeStyle = '#1a3a1a';
+      graphCtx.beginPath();
+      graphCtx.moveTo(0, h - (16.67 / 40) * h);
+      graphCtx.lineTo(w, h - (16.67 / 40) * h);
+      graphCtx.stroke();
+      
+      if (history.length < 2) return;
+      
+      graphCtx.strokeStyle = '#33ff33';
+      graphCtx.lineWidth = 1;
+      graphCtx.beginPath();
+      const step = w / (history.length - 1);
+      for (let i = 0; i < history.length; i++) {
+        const x = i * step;
+        const y = h - Math.min(1, history[i] / 40) * h;
+        if (i === 0) graphCtx.moveTo(x, y);
+        else graphCtx.lineTo(x, y);
+      }
+      graphCtx.stroke();
+    }
+    
+    // Tuning sliders
+    document.getElementById('tune-rays').addEventListener('input', e => {
+      renderer.setRayCount(parseInt(e.target.value));
+      document.getElementById('tune-rays-val').textContent = e.target.value;
+    });
+    document.getElementById('tune-viewdist').addEventListener('input', e => {
+      renderer.setViewDist(parseInt(e.target.value));
+      visibility.viewDistance = parseInt(e.target.value);
+      document.getElementById('tune-viewdist-val').textContent = e.target.value;
+    });
+    document.getElementById('tune-texscale').addEventListener('input', e => {
+      renderer.setTexScale(parseInt(e.target.value));
+      document.getElementById('tune-texscale-val').textContent = e.target.value + '%';
+    });
+    
+    function showMessage(text) {
+      const log = document.getElementById('messages');
+      const msg = document.createElement('div');
+      msg.className = 'message';
+      msg.textContent = text;
+      log.appendChild(msg);
+      setTimeout(() => msg.remove(), 2500);
+    }
+    
+    // Game loop
+    let lastTime = 0;
+    let uiUpdateTimer = 0;
+    
+    function gameLoop(time) {
+      profiler.start('frame');
+      
+      const dt = Math.min((time - lastTime) / 1000, 0.1);
+      lastTime = time;
+      
+      // Update
+      const move = input.getMovement(dt, player.speed * dt);
+      player.angle += move.turn;
+      while (player.angle < 0) player.angle += Math.PI * 2;
+      while (player.angle >= Math.PI * 2) player.angle -= Math.PI * 2;
+      
+      const fx = Math.cos(player.angle), fy = Math.sin(player.angle);
+      const sx = Math.cos(player.angle + Math.PI/2), sy = Math.sin(player.angle + Math.PI/2);
+      const dx = fx * move.forward + sx * move.strafe;
+      const dy = fy * move.forward + sy * move.strafe;
+      
+      if (dx !== 0 || dy !== 0) {
+        const res = movement.move(player, dx, dy);
+        player.x = res.x; player.y = res.y;
+      }
+      
+      visibility.update(player.x, player.y);
+      
+      // Render
+      renderer.render(world, visibility, player.x, player.y, player.angle);
+      overlay.render();
+      minimap.render(world, visibility, player.x, player.y, player.angle);
+      
+      profiler.end('frame');
+      
+      // UI updates (throttled)
+      uiUpdateTimer += dt;
+      if (uiUpdateTimer > 0.1) {
+        uiUpdateTimer = 0;
+        
+        const frame = profiler.getAvg('frame');
+        const fps = frame > 0 ? 1000 / frame : 0;
+        
+        const fpsEl = document.getElementById('stat-fps');
+        fpsEl.textContent = fps.toFixed(0);
+        fpsEl.className = 'stat-value' + (fps >= 55 ? '' : fps >= 30 ? ' warn' : ' bad');
+        
+        document.getElementById('stat-frame').textContent = frame.toFixed(1) + 'ms';
+        document.getElementById('stat-gpu').textContent = profiler.getAvg('gpu').toFixed(1) + 'ms';
+        document.getElementById('stat-sector').textContent = world.getSector(player.x, player.y).name || '--';
+        
+        document.getElementById('perf-frame').textContent = frame.toFixed(2) + 'ms';
+        document.getElementById('perf-raycast').textContent = profiler.getAvg('raycast').toFixed(2) + 'ms';
+        document.getElementById('perf-gpu').textContent = profiler.getAvg('gpu').toFixed(2) + 'ms';
+        document.getElementById('perf-visibility').textContent = profiler.getAvg('visibility').toFixed(2) + 'ms';
+        document.getElementById('perf-minimap').textContent = profiler.getAvg('minimap').toFixed(2) + 'ms';
+        
+        document.getElementById('perf-drawcalls').textContent = renderer.drawCalls;
+        document.getElementById('perf-tris').textContent = renderer.triangleCount;
+        
+        const jitter = profiler.getJitter('frame');
+        const jitterEl = document.getElementById('perf-jitter');
+        jitterEl.textContent = jitter.toFixed(2) + 'ms';
+        jitterEl.className = 'perf-value' + (jitter < 2 ? '' : jitter < 5 ? ' warn' : ' bad');
+        
+        const barFill = document.getElementById('bar-frame');
+        const pct = Math.min(100, (frame / 33.33) * 100);
+        barFill.style.width = pct + '%';
+        barFill.className = 'perf-bar-fill' + (frame < 16.67 ? '' : frame < 33.33 ? ' warn' : ' bad');
+        
+        drawPerfGraph();
+      }
+      
+      requestAnimationFrame(gameLoop);
+    }
+    
+    showMessage('SECTOR ENGINE - WebGL2 GPU Accelerated');
+    showMessage('CPU: Raycasting | GPU: Textured Rendering');
+    requestAnimationFrame(gameLoop);
+  </script>
+</body>
+</html>

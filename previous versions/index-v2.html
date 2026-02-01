@@ -1,0 +1,1290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Installation Alpha v2 - GPU Accelerated</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700&display=swap');
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      background: #0a0a0c;
+      color: #33ff33;
+      font-family: 'Share Tech Mono', monospace;
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    #header {
+      background: linear-gradient(180deg, #1a1a1f 0%, #0d0d10 100%);
+      border-bottom: 2px solid #33ff33;
+      padding: 10px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 4px 20px rgba(51, 255, 51, 0.1);
+      z-index: 100;
+    }
+    
+    #header h1 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1.2rem;
+      letter-spacing: 4px;
+      text-shadow: 0 0 10px rgba(51, 255, 51, 0.5);
+    }
+    
+    .version-tag {
+      font-size: 0.6rem;
+      color: #666;
+      margin-left: 12px;
+      letter-spacing: 2px;
+    }
+    
+    #stats {
+      display: flex;
+      gap: 24px;
+      font-size: 0.8rem;
+    }
+    
+    .stat {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    
+    .stat-label {
+      color: #555;
+      font-size: 0.65rem;
+      letter-spacing: 2px;
+    }
+    
+    .stat-value {
+      color: #33ff33;
+      text-shadow: 0 0 8px rgba(51, 255, 51, 0.4);
+    }
+    
+    #main-container {
+      flex: 1;
+      display: flex;
+      gap: 0;
+      padding: 12px;
+      min-height: 0;
+    }
+    
+    #viewport-container {
+      flex: 2;
+      position: relative;
+      border: 2px solid #1a1a1a;
+      border-radius: 4px;
+      overflow: hidden;
+      background: #000;
+      cursor: crosshair;
+    }
+    
+    #viewport-container.pointer-locked {
+      cursor: none;
+    }
+    
+    #game-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    
+    #overlay-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    
+    #click-to-play {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.85);
+      border: 1px solid #33ff33;
+      padding: 20px 40px;
+      text-align: center;
+      z-index: 50;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    #click-to-play:hover {
+      background: rgba(51, 255, 51, 0.1);
+      box-shadow: 0 0 20px rgba(51, 255, 51, 0.3);
+    }
+    
+    #click-to-play.hidden {
+      display: none;
+    }
+    
+    #click-to-play h2 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1rem;
+      letter-spacing: 3px;
+      margin-bottom: 8px;
+    }
+    
+    #click-to-play p {
+      font-size: 0.75rem;
+      color: #888;
+    }
+    
+    #minimap-container {
+      flex: 1;
+      max-width: 320px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding-left: 12px;
+    }
+    
+    #minimap-wrapper {
+      background: linear-gradient(135deg, #0f0f12 0%, #151518 100%);
+      border: 1px solid #222;
+      border-radius: 4px;
+      padding: 12px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    #minimap-title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.7rem;
+      letter-spacing: 3px;
+      color: #444;
+      margin-bottom: 10px;
+      text-align: center;
+    }
+    
+    #minimap-canvas {
+      flex: 1;
+      width: 100%;
+      border: 1px solid #1a1a1a;
+      background: #030305;
+    }
+    
+    #info-panel {
+      background: linear-gradient(135deg, #0f0f12 0%, #151518 100%);
+      border: 1px solid #222;
+      border-radius: 4px;
+      padding: 12px;
+    }
+    
+    #info-title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.7rem;
+      letter-spacing: 3px;
+      color: #444;
+      margin-bottom: 10px;
+    }
+    
+    .control-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 5px;
+      font-size: 0.75rem;
+      color: #888;
+    }
+    
+    .key {
+      background: #1a1a1f;
+      border: 1px solid #2a2a2a;
+      padding: 2px 6px;
+      border-radius: 2px;
+      color: #33ff33;
+      font-size: 0.7rem;
+    }
+    
+    #perf-stats {
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid #1a1a1a;
+      font-size: 0.7rem;
+      color: #555;
+    }
+    
+    .perf-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 3px;
+    }
+    
+    .perf-value {
+      color: #33ff33;
+    }
+    
+    #message-log {
+      position: absolute;
+      bottom: 16px;
+      left: 16px;
+      z-index: 20;
+      max-width: 350px;
+    }
+    
+    .log-message {
+      background: rgba(0, 0, 0, 0.85);
+      border-left: 2px solid #33ff33;
+      padding: 6px 10px;
+      margin-bottom: 3px;
+      font-size: 0.8rem;
+      animation: msgIn 0.2s ease-out, msgOut 0.4s ease-in 2.5s forwards;
+    }
+    
+    @keyframes msgIn {
+      from { opacity: 0; transform: translateX(-10px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+    
+    @keyframes msgOut {
+      from { opacity: 1; }
+      to { opacity: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div id="header">
+    <h1>INSTALLATION ALPHA <span class="version-tag">GPU v2</span></h1>
+    <div id="stats">
+      <div class="stat">
+        <span class="stat-label">EXPLORED</span>
+        <span class="stat-value" id="sectors-discovered">0%</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">SECTOR</span>
+        <span class="stat-value" id="current-sector">--</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">POS</span>
+        <span class="stat-value" id="player-position">0, 0</span>
+      </div>
+    </div>
+  </div>
+  
+  <div id="main-container">
+    <div id="viewport-container">
+      <canvas id="game-canvas"></canvas>
+      <canvas id="overlay-canvas"></canvas>
+      <div id="click-to-play">
+        <h2>CLICK TO ENGAGE</h2>
+        <p>Mouse look + WASD movement</p>
+      </div>
+      <div id="message-log"></div>
+    </div>
+    
+    <div id="minimap-container">
+      <div id="minimap-wrapper">
+        <div id="minimap-title">TACTICAL MAP</div>
+        <canvas id="minimap-canvas"></canvas>
+      </div>
+      
+      <div id="info-panel">
+        <div id="info-title">CONTROLS</div>
+        <div class="control-row">
+          <span>Move</span>
+          <span><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span></span>
+        </div>
+        <div class="control-row">
+          <span>Look</span>
+          <span>Mouse / <span class="key">←</span><span class="key">→</span></span>
+        </div>
+        <div class="control-row">
+          <span>Run</span>
+          <span><span class="key">Shift</span></span>
+        </div>
+        <div class="control-row">
+          <span>Release</span>
+          <span><span class="key">Esc</span></span>
+        </div>
+        
+        <div id="perf-stats">
+          <div class="perf-row">
+            <span>FPS</span>
+            <span class="perf-value" id="fps-counter">--</span>
+          </div>
+          <div class="perf-row">
+            <span>Draw calls</span>
+            <span class="perf-value" id="draw-calls">--</span>
+          </div>
+          <div class="perf-row">
+            <span>Visible walls</span>
+            <span class="perf-value" id="visible-walls">--</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ============================================
+    // INSTALLATION ALPHA v2 - GPU ACCELERATED
+    // Smart CPU/GPU split for mobile GPUs
+    // ============================================
+
+    const CONFIG = {
+      // Rendering
+      RAY_COUNT: 400,
+      MAX_RAY_DEPTH: 20,
+      FOV: Math.PI * 0.6,
+      
+      // Movement
+      MOVE_SPEED: 3.0,
+      RUN_MULTIPLIER: 1.7,
+      MOUSE_SENSITIVITY: 0.002,
+      KEY_TURN_SPEED: 2.2,
+      
+      // Player
+      EYE_HEIGHT: 0.45,
+      PLAYER_RADIUS: 0.2,
+      
+      // Visibility
+      VIEW_DISTANCE: 14,
+      
+      // Lighting - BRIGHTER
+      AMBIENT_LIGHT: 0.25,
+      WALL_SHADE_FACTOR: 0.08,
+      FOG_DENSITY: 0.04,
+      FOG_COLOR: [0.08, 0.09, 0.12]
+    };
+
+    // ============================================
+    // LEVEL DEFINITION
+    // ============================================
+    const LEVEL = {
+      width: 24,
+      height: 24,
+      playerStart: { x: 3.5, y: 12.5, angle: 0 },
+      
+      sectorTypes: {
+        void: { 
+          floor: -10, ceiling: -10, 
+          floorColor: [0.02, 0.02, 0.03], 
+          wallColor: [0.1, 0.1, 0.12],
+          ceilingColor: [0.02, 0.02, 0.03], 
+          walkable: false,
+          name: 'VOID'
+        },
+        hangar: { 
+          floor: 0, ceiling: 1.4, 
+          floorColor: [0.35, 0.35, 0.38], 
+          wallColor: [0.45, 0.45, 0.5],
+          ceilingColor: [0.25, 0.25, 0.28], 
+          walkable: true,
+          name: 'HANGAR'
+        },
+        hangar_platform: { 
+          floor: 0.2, ceiling: 1.4, 
+          floorColor: [0.5, 0.45, 0.35], 
+          wallColor: [0.55, 0.5, 0.4],
+          ceilingColor: [0.25, 0.25, 0.28], 
+          walkable: true,
+          name: 'PLATFORM'
+        },
+        corridor: { 
+          floor: 0, ceiling: 1.1, 
+          floorColor: [0.32, 0.32, 0.36], 
+          wallColor: [0.4, 0.4, 0.45],
+          ceilingColor: [0.2, 0.2, 0.24], 
+          walkable: true,
+          name: 'CORRIDOR'
+        },
+        zigzag: { 
+          floor: 0.05, ceiling: 1.5, 
+          floorColor: [0.28, 0.35, 0.3], 
+          wallColor: [0.35, 0.45, 0.38],
+          ceilingColor: [0.18, 0.22, 0.18], 
+          walkable: true,
+          name: 'OPS CENTER'
+        },
+        computer: { 
+          floor: 0.1, ceiling: 1.2, 
+          floorColor: [0.3, 0.32, 0.4], 
+          wallColor: [0.38, 0.4, 0.5],
+          ceilingColor: [0.15, 0.18, 0.25], 
+          walkable: true,
+          name: 'TERMINAL BAY'
+        },
+        outdoor: { 
+          floor: -0.1, ceiling: 4.0, 
+          floorColor: [0.4, 0.38, 0.32], 
+          wallColor: [0.5, 0.48, 0.42],
+          ceilingColor: [0.15, 0.18, 0.25], 
+          walkable: true,
+          name: 'EXTERIOR'
+        },
+        pillar: { 
+          floor: 0, ceiling: 1.5, 
+          floorColor: [0.5, 0.48, 0.45], 
+          wallColor: [0.55, 0.53, 0.5],
+          ceilingColor: [0.2, 0.2, 0.22], 
+          walkable: false,
+          name: 'PILLAR'
+        },
+        crate: { 
+          floor: 0.5, ceiling: 1.2, 
+          floorColor: [0.5, 0.4, 0.28], 
+          wallColor: [0.55, 0.45, 0.32],
+          ceilingColor: [0.2, 0.2, 0.22], 
+          walkable: false,
+          name: 'CRATE'
+        }
+      },
+      
+      grid: null,
+      
+      init() {
+        this.grid = Array(this.height).fill(null).map(() => 
+          Array(this.width).fill('void')
+        );
+        
+        const regions = [
+          // Entry hangar
+          { type: 'hangar', x1: 1, y1: 9, x2: 7, y2: 15 },
+          { type: 'hangar_platform', x1: 4, y1: 11, x2: 6, y2: 13 },
+          
+          // Corridors
+          { type: 'corridor', x1: 7, y1: 11, x2: 11, y2: 13 },
+          { type: 'corridor', x1: 17, y1: 11, x2: 19, y2: 13 },
+          
+          // Zigzag / ops room
+          { type: 'zigzag', x1: 11, y1: 7, x2: 17, y2: 17 },
+          { type: 'pillar', x1: 13, y1: 9, x2: 13, y2: 9 },
+          { type: 'pillar', x1: 15, y1: 9, x2: 15, y2: 9 },
+          { type: 'pillar', x1: 13, y1: 15, x2: 13, y2: 15 },
+          { type: 'pillar', x1: 15, y1: 15, x2: 15, y2: 15 },
+          
+          // Computer room
+          { type: 'computer', x1: 19, y1: 9, x2: 23, y2: 15 },
+          { type: 'crate', x1: 21, y1: 10, x2: 22, y2: 10 },
+          { type: 'crate', x1: 21, y1: 14, x2: 21, y2: 14 },
+          
+          // Secret outdoor
+          { type: 'outdoor', x1: 1, y1: 1, x2: 7, y2: 7 },
+          { type: 'hangar', x1: 3, y1: 8, x2: 5, y2: 8 }
+        ];
+        
+        for (const region of regions) {
+          for (let y = region.y1; y <= region.y2; y++) {
+            for (let x = region.x1; x <= region.x2; x++) {
+              if (x >= 0 && x < this.width && y >= 0 && y < this.height) {
+                this.grid[y][x] = region.type;
+              }
+            }
+          }
+        }
+      },
+      
+      getSector(x, y) {
+        const gx = Math.floor(x);
+        const gy = Math.floor(y);
+        if (gx < 0 || gx >= this.width || gy < 0 || gy >= this.height) {
+          return this.sectorTypes.void;
+        }
+        return this.sectorTypes[this.grid[gy][gx]] || this.sectorTypes.void;
+      },
+      
+      getGridType(gx, gy) {
+        if (gx < 0 || gx >= this.width || gy < 0 || gy >= this.height) {
+          return 'void';
+        }
+        return this.grid[gy][gx];
+      }
+    };
+
+    // ============================================
+    // PLAYER
+    // ============================================
+    const player = {
+      x: 0, y: 0, angle: 0,
+      
+      init() {
+        this.x = LEVEL.playerStart.x;
+        this.y = LEVEL.playerStart.y;
+        this.angle = LEVEL.playerStart.angle;
+      },
+      
+      move(forward, strafe) {
+        // Calculate movement vector
+        const fx = Math.cos(this.angle);
+        const fy = Math.sin(this.angle);
+        const sx = Math.cos(this.angle + Math.PI/2);
+        const sy = Math.sin(this.angle + Math.PI/2);
+        
+        const dx = fx * forward + sx * strafe;
+        const dy = fy * forward + sy * strafe;
+        
+        // Try full movement first
+        const newX = this.x + dx;
+        const newY = this.y + dy;
+        
+        if (this.canMoveTo(newX, newY)) {
+          this.x = newX;
+          this.y = newY;
+          return;
+        }
+        
+        // Try X only (slide along Y walls)
+        if (this.canMoveTo(newX, this.y)) {
+          this.x = newX;
+          return;
+        }
+        
+        // Try Y only (slide along X walls)
+        if (this.canMoveTo(this.x, newY)) {
+          this.y = newY;
+          return;
+        }
+      },
+      
+      canMoveTo(x, y) {
+        const r = CONFIG.PLAYER_RADIUS;
+        // Check corners of bounding box
+        const points = [
+          [x - r, y - r], [x + r, y - r],
+          [x - r, y + r], [x + r, y + r],
+          [x, y] // center
+        ];
+        
+        for (const [px, py] of points) {
+          const sector = LEVEL.getSector(px, py);
+          if (!sector.walkable) return false;
+        }
+        return true;
+      }
+    };
+
+    // ============================================
+    // FOG OF WAR
+    // ============================================
+    const fogOfWar = {
+      discovered: new Set(),
+      currentlyVisible: new Set(),
+      totalWalkable: 0,
+      
+      init() {
+        this.totalWalkable = 0;
+        for (let y = 0; y < LEVEL.height; y++) {
+          for (let x = 0; x < LEVEL.width; x++) {
+            if (LEVEL.getSector(x, y).walkable) {
+              this.totalWalkable++;
+            }
+          }
+        }
+      },
+      
+      update() {
+        this.currentlyVisible.clear();
+        
+        const rayCount = 180;
+        for (let i = 0; i < rayCount; i++) {
+          const angle = (i / rayCount) * Math.PI * 2;
+          this.castRay(angle);
+        }
+      },
+      
+      castRay(angle) {
+        const step = 0.4;
+        let x = player.x;
+        let y = player.y;
+        
+        for (let d = 0; d < CONFIG.VIEW_DISTANCE; d += step) {
+          x += Math.cos(angle) * step;
+          y += Math.sin(angle) * step;
+          
+          const gx = Math.floor(x);
+          const gy = Math.floor(y);
+          const key = `${gx},${gy}`;
+          
+          this.currentlyVisible.add(key);
+          
+          const sector = LEVEL.getSector(x, y);
+          if (sector.walkable) {
+            this.discovered.add(key);
+          }
+          
+          if (!sector.walkable) break;
+        }
+      },
+      
+      isVisible(gx, gy) {
+        return this.currentlyVisible.has(`${gx},${gy}`);
+      },
+      
+      isDiscovered(gx, gy) {
+        return this.discovered.has(`${gx},${gy}`);
+      },
+      
+      getDiscoveryPercent() {
+        let discovered = 0;
+        for (let y = 0; y < LEVEL.height; y++) {
+          for (let x = 0; x < LEVEL.width; x++) {
+            if (LEVEL.getSector(x, y).walkable && this.discovered.has(`${x},${y}`)) {
+              discovered++;
+            }
+          }
+        }
+        return Math.round((discovered / this.totalWalkable) * 100);
+      }
+    };
+
+    // ============================================
+    // INPUT
+    // ============================================
+    const input = {
+      keys: {},
+      mouseX: 0,
+      mouseDX: 0,
+      isLocked: false,
+      
+      init() {
+        window.addEventListener('keydown', (e) => {
+          this.keys[e.code] = true;
+          if (['KeyW','KeyA','KeyS','KeyD','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Space'].includes(e.code)) {
+            e.preventDefault();
+          }
+        });
+        
+        window.addEventListener('keyup', (e) => {
+          this.keys[e.code] = false;
+        });
+        
+        const viewport = document.getElementById('viewport-container');
+        const clickPrompt = document.getElementById('click-to-play');
+        
+        viewport.addEventListener('click', () => {
+          if (!this.isLocked) {
+            viewport.requestPointerLock();
+          }
+        });
+        
+        document.addEventListener('pointerlockchange', () => {
+          this.isLocked = document.pointerLockElement === viewport;
+          clickPrompt.classList.toggle('hidden', this.isLocked);
+          viewport.classList.toggle('pointer-locked', this.isLocked);
+        });
+        
+        document.addEventListener('mousemove', (e) => {
+          if (this.isLocked) {
+            this.mouseDX += e.movementX;
+          }
+        });
+      },
+      
+      consumeMouseDelta() {
+        const dx = this.mouseDX;
+        this.mouseDX = 0;
+        return dx;
+      },
+      
+      isPressed(code) {
+        return this.keys[code] === true;
+      }
+    };
+
+    // ============================================
+    // WEBGL2 RENDERER
+    // ============================================
+    const glRenderer = {
+      canvas: null,
+      gl: null,
+      wallProgram: null,
+      quadVAO: null,
+      width: 0,
+      height: 0,
+      
+      // Stats
+      drawCalls: 0,
+      visibleWalls: 0,
+      
+      init() {
+        this.canvas = document.getElementById('game-canvas');
+        this.gl = this.canvas.getContext('webgl2', { 
+          antialias: false,
+          powerPreference: 'low-power' // Be nice to mobile GPU
+        });
+        
+        if (!this.gl) {
+          console.error('WebGL2 not supported');
+          return false;
+        }
+        
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+        
+        this.initShaders();
+        this.initGeometry();
+        
+        return true;
+      },
+      
+      resize() {
+        const container = this.canvas.parentElement;
+        this.width = container.clientWidth;
+        this.height = container.clientHeight;
+        this.canvas.width = this.width;
+        this.canvas.height = this.height;
+        
+        // Also resize overlay
+        const overlay = document.getElementById('overlay-canvas');
+        overlay.width = this.width;
+        overlay.height = this.height;
+        
+        if (this.gl) {
+          this.gl.viewport(0, 0, this.width, this.height);
+        }
+      },
+      
+      initShaders() {
+        const gl = this.gl;
+        
+        // Wall shader - receives pre-computed column data from CPU raycaster
+        const wallVS = `#version 300 es
+          in vec2 a_position;
+          in vec4 a_color;
+          in float a_fog;
+          
+          out vec4 v_color;
+          out float v_fog;
+          
+          void main() {
+            gl_Position = vec4(a_position, 0.0, 1.0);
+            v_color = a_color;
+            v_fog = a_fog;
+          }
+        `;
+        
+        const wallFS = `#version 300 es
+          precision mediump float;
+          
+          in vec4 v_color;
+          in float v_fog;
+          
+          uniform vec3 u_fogColor;
+          
+          out vec4 fragColor;
+          
+          void main() {
+            vec3 color = mix(v_color.rgb, u_fogColor, v_fog);
+            fragColor = vec4(color, 1.0);
+          }
+        `;
+        
+        this.wallProgram = this.createProgram(wallVS, wallFS);
+      },
+      
+      createProgram(vsSource, fsSource) {
+        const gl = this.gl;
+        
+        const vs = gl.createShader(gl.VERTEX_SHADER);
+        gl.shaderSource(vs, vsSource);
+        gl.compileShader(vs);
+        if (!gl.getShaderParameter(vs, gl.COMPILE_STATUS)) {
+          console.error('VS error:', gl.getShaderInfoLog(vs));
+        }
+        
+        const fs = gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(fs, fsSource);
+        gl.compileShader(fs);
+        if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)) {
+          console.error('FS error:', gl.getShaderInfoLog(fs));
+        }
+        
+        const program = gl.createProgram();
+        gl.attachShader(program, vs);
+        gl.attachShader(program, fs);
+        gl.linkProgram(program);
+        
+        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+          console.error('Link error:', gl.getProgramInfoLog(program));
+        }
+        
+        return program;
+      },
+      
+      initGeometry() {
+        const gl = this.gl;
+        
+        // Create a dynamic buffer for wall columns
+        this.wallBuffer = gl.createBuffer();
+        this.wallVAO = gl.createVertexArray();
+        
+        gl.bindVertexArray(this.wallVAO);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.wallBuffer);
+        
+        // Vertex layout: x, y, r, g, b, a, fog
+        const stride = 7 * 4;
+        
+        const posLoc = gl.getAttribLocation(this.wallProgram, 'a_position');
+        gl.enableVertexAttribArray(posLoc);
+        gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, stride, 0);
+        
+        const colorLoc = gl.getAttribLocation(this.wallProgram, 'a_color');
+        gl.enableVertexAttribArray(colorLoc);
+        gl.vertexAttribPointer(colorLoc, 4, gl.FLOAT, false, stride, 8);
+        
+        const fogLoc = gl.getAttribLocation(this.wallProgram, 'a_fog');
+        gl.enableVertexAttribArray(fogLoc);
+        gl.vertexAttribPointer(fogLoc, 1, gl.FLOAT, false, stride, 24);
+        
+        gl.bindVertexArray(null);
+      },
+      
+      render(wallData) {
+        const gl = this.gl;
+        
+        this.drawCalls = 0;
+        
+        // Clear with dark color
+        gl.clearColor(0.04, 0.04, 0.05, 1.0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        
+        // Draw ceiling gradient (as a simple quad)
+        this.drawBackground();
+        
+        // Draw walls
+        if (wallData.length > 0) {
+          gl.useProgram(this.wallProgram);
+          
+          const fogColorLoc = gl.getUniformLocation(this.wallProgram, 'u_fogColor');
+          gl.uniform3fv(fogColorLoc, CONFIG.FOG_COLOR);
+          
+          gl.bindVertexArray(this.wallVAO);
+          gl.bindBuffer(gl.ARRAY_BUFFER, this.wallBuffer);
+          gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(wallData), gl.DYNAMIC_DRAW);
+          
+          gl.drawArrays(gl.TRIANGLES, 0, wallData.length / 7);
+          this.drawCalls++;
+        }
+        
+        gl.bindVertexArray(null);
+      },
+      
+      drawBackground() {
+        // For simplicity, draw background with a full-screen gradient
+        // This could be a separate shader, but we'll keep it simple
+        const gl = this.gl;
+        
+        // We'll handle this in the overlay canvas for now
+      }
+    };
+
+    // ============================================
+    // CPU RAYCASTER - Builds draw list for GPU
+    // ============================================
+    const raycaster = {
+      wallData: [],
+      
+      cast() {
+        this.wallData = [];
+        this.visibleWalls = 0;
+        
+        const w = glRenderer.width;
+        const h = glRenderer.height;
+        const rayCount = CONFIG.RAY_COUNT;
+        
+        for (let i = 0; i < rayCount; i++) {
+          // Calculate ray angle - spread across FOV
+          const rayOffset = (i / rayCount) - 0.5; // -0.5 to 0.5
+          const rayAngle = player.angle + rayOffset * CONFIG.FOV;
+          
+          this.castSingleRay(i, rayCount, rayAngle, w, h);
+        }
+        
+        glRenderer.visibleWalls = this.visibleWalls;
+        return this.wallData;
+      },
+      
+      castSingleRay(column, rayCount, angle, w, h) {
+        const step = 0.03;
+        let x = player.x;
+        let y = player.y;
+        let dist = 0;
+        
+        const dx = Math.cos(angle) * step;
+        const dy = Math.sin(angle) * step;
+        
+        while (dist < CONFIG.MAX_RAY_DEPTH) {
+          x += dx;
+          y += dy;
+          dist += step;
+          
+          const gx = Math.floor(x);
+          const gy = Math.floor(y);
+          const sector = LEVEL.getSector(x, y);
+          
+          if (!sector.walkable) {
+            // Hit a wall
+            const visible = fogOfWar.isVisible(gx, gy);
+            const discovered = fogOfWar.isDiscovered(gx, gy);
+            
+            if (!visible && !discovered) {
+              return; // Can't see it at all
+            }
+            
+            // Fish-eye correction
+            const correctedDist = Math.max(0.1, dist * Math.cos(angle - player.angle));
+            
+            // Wall height in screen pixels
+            const wallHeight = (h * 0.8) / correctedDist;
+            const wallTop = (h - wallHeight) / 2;
+            const wallBottom = wallTop + wallHeight;
+            
+            // Convert to WebGL clip space (-1 to 1, Y flipped)
+            const columnWidth = w / rayCount;
+            const left = ((column * columnWidth) / w) * 2 - 1;
+            const right = (((column + 1) * columnWidth) / w) * 2 - 1;
+            const top = 1 - (wallTop / h) * 2;
+            const bottom = 1 - (wallBottom / h) * 2;
+            
+            // Clamp to screen
+            const clampedTop = Math.min(Math.max(top, -1), 1);
+            const clampedBottom = Math.min(Math.max(bottom, -1), 1);
+            
+            // Determine wall color
+            let color = sector.wallColor;
+            
+            // Side shading - check which axis we crossed
+            const fractX = x - Math.floor(x);
+            const fractY = y - Math.floor(y);
+            const isNS = (fractX < 0.08 || fractX > 0.92);
+            
+            // Distance shading
+            const shade = Math.max(CONFIG.AMBIENT_LIGHT, 1.0 - correctedDist * CONFIG.WALL_SHADE_FACTOR);
+            
+            let r = color[0] * shade;
+            let g = color[1] * shade;
+            let b = color[2] * shade;
+            
+            // Darken N/S walls slightly for depth
+            if (isNS) {
+              r *= 0.82;
+              g *= 0.82;
+              b *= 0.82;
+            }
+            
+            // Fog factor
+            const fog = Math.min(0.85, correctedDist * CONFIG.FOG_DENSITY);
+            
+            // Discovered but not visible - desaturate
+            if (!visible && discovered) {
+              const lum = (r + g + b) / 3;
+              r = lum * 0.5;
+              g = lum * 0.5;
+              b = lum * 0.55;
+            }
+            
+            // Add two triangles for this column (quad)
+            // Triangle 1: top-left, top-right, bottom-left
+            this.wallData.push(
+              left, clampedTop, r, g, b, 1, fog,
+              right, clampedTop, r, g, b, 1, fog,
+              left, clampedBottom, r, g, b, 1, fog
+            );
+            
+            // Triangle 2: top-right, bottom-right, bottom-left
+            this.wallData.push(
+              right, clampedTop, r, g, b, 1, fog,
+              right, clampedBottom, r, g, b, 1, fog,
+              left, clampedBottom, r, g, b, 1, fog
+            );
+            
+            this.visibleWalls++;
+            return;
+          }
+        }
+      }
+    };
+
+    // ============================================
+    // OVERLAY RENDERER (2D Canvas for HUD, etc)
+    // ============================================
+    const overlay = {
+      canvas: null,
+      ctx: null,
+      
+      init() {
+        this.canvas = document.getElementById('overlay-canvas');
+        this.ctx = this.canvas.getContext('2d');
+      },
+      
+      render() {
+        const ctx = this.ctx;
+        const w = this.canvas.width;
+        const h = this.canvas.height;
+        
+        ctx.clearRect(0, 0, w, h);
+        
+        // Draw ceiling gradient
+        const ceilGrad = ctx.createLinearGradient(0, 0, 0, h * 0.5);
+        ceilGrad.addColorStop(0, 'rgb(15, 18, 25)');
+        ceilGrad.addColorStop(1, 'rgb(35, 38, 48)');
+        ctx.fillStyle = ceilGrad;
+        ctx.fillRect(0, 0, w, h * 0.5);
+        
+        // Draw floor gradient
+        const floorGrad = ctx.createLinearGradient(0, h * 0.5, 0, h);
+        floorGrad.addColorStop(0, 'rgb(40, 42, 48)');
+        floorGrad.addColorStop(1, 'rgb(18, 18, 22)');
+        ctx.fillStyle = floorGrad;
+        ctx.fillRect(0, h * 0.5, w, h * 0.5);
+        
+        // Subtle vignette
+        const vignetteGrad = ctx.createRadialGradient(w/2, h/2, h*0.3, w/2, h/2, h*0.9);
+        vignetteGrad.addColorStop(0, 'rgba(0,0,0,0)');
+        vignetteGrad.addColorStop(1, 'rgba(0,0,0,0.4)');
+        ctx.fillStyle = vignetteGrad;
+        ctx.fillRect(0, 0, w, h);
+        
+        // Crosshair
+        ctx.strokeStyle = 'rgba(51, 255, 51, 0.6)';
+        ctx.lineWidth = 1.5;
+        const cx = w/2, cy = h/2;
+        
+        ctx.beginPath();
+        ctx.moveTo(cx - 12, cy);
+        ctx.lineTo(cx - 5, cy);
+        ctx.moveTo(cx + 5, cy);
+        ctx.lineTo(cx + 12, cy);
+        ctx.moveTo(cx, cy - 12);
+        ctx.lineTo(cx, cy - 5);
+        ctx.moveTo(cx, cy + 5);
+        ctx.lineTo(cx, cy + 12);
+        ctx.stroke();
+        
+        // Center dot
+        ctx.fillStyle = 'rgba(51, 255, 51, 0.8)';
+        ctx.beginPath();
+        ctx.arc(cx, cy, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    };
+
+    // ============================================
+    // MINIMAP
+    // ============================================
+    const minimap = {
+      canvas: null,
+      ctx: null,
+      
+      init() {
+        this.canvas = document.getElementById('minimap-canvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+      },
+      
+      resize() {
+        const wrapper = this.canvas.parentElement;
+        const size = Math.min(wrapper.clientWidth - 24, wrapper.clientHeight - 40);
+        this.canvas.width = size;
+        this.canvas.height = size;
+      },
+      
+      render() {
+        const ctx = this.ctx;
+        const w = this.canvas.width;
+        const h = this.canvas.height;
+        const cellW = w / LEVEL.width;
+        const cellH = h / LEVEL.height;
+        
+        ctx.fillStyle = '#030305';
+        ctx.fillRect(0, 0, w, h);
+        
+        // Draw sectors
+        for (let y = 0; y < LEVEL.height; y++) {
+          for (let x = 0; x < LEVEL.width; x++) {
+            const sector = LEVEL.getSector(x, y);
+            const visible = fogOfWar.isVisible(x, y);
+            const discovered = fogOfWar.isDiscovered(x, y);
+            
+            let color;
+            if (!discovered && !visible) {
+              color = '#06060a';
+            } else if (!sector.walkable) {
+              color = visible ? '#3a3a42' : '#1a1a22';
+            } else {
+              if (visible) {
+                const c = sector.floorColor;
+                color = `rgb(${Math.floor(c[0]*180)},${Math.floor(c[1]*180)},${Math.floor(c[2]*180)})`;
+              } else {
+                color = '#18181e';
+              }
+            }
+            
+            ctx.fillStyle = color;
+            ctx.fillRect(x * cellW, y * cellH, cellW + 0.5, cellH + 0.5);
+          }
+        }
+        
+        // Player FOV cone
+        const px = player.x * cellW;
+        const py = player.y * cellH;
+        const coneLen = CONFIG.VIEW_DISTANCE * cellW;
+        const halfFov = CONFIG.FOV / 2;
+        
+        ctx.fillStyle = 'rgba(51, 255, 51, 0.12)';
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(px + Math.cos(player.angle - halfFov) * coneLen, 
+                   py + Math.sin(player.angle - halfFov) * coneLen);
+        ctx.arc(px, py, coneLen, player.angle - halfFov, player.angle + halfFov);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Player
+        ctx.fillStyle = '#33ff33';
+        ctx.shadowColor = '#33ff33';
+        ctx.shadowBlur = 6;
+        ctx.beginPath();
+        ctx.arc(px, py, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        
+        // Direction
+        ctx.strokeStyle = '#33ff33';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(px + Math.cos(player.angle) * 10, py + Math.sin(player.angle) * 10);
+        ctx.stroke();
+      }
+    };
+
+    // ============================================
+    // UI
+    // ============================================
+    function updateUI() {
+      document.getElementById('sectors-discovered').textContent = 
+        fogOfWar.getDiscoveryPercent() + '%';
+      
+      const sector = LEVEL.getSector(player.x, player.y);
+      document.getElementById('current-sector').textContent = sector.name || '--';
+      
+      document.getElementById('player-position').textContent = 
+        `${player.x.toFixed(1)}, ${player.y.toFixed(1)}`;
+      
+      document.getElementById('draw-calls').textContent = glRenderer.drawCalls;
+      document.getElementById('visible-walls').textContent = glRenderer.visibleWalls;
+    }
+
+    function showMessage(text) {
+      const log = document.getElementById('message-log');
+      const msg = document.createElement('div');
+      msg.className = 'log-message';
+      msg.textContent = text;
+      log.appendChild(msg);
+      setTimeout(() => msg.remove(), 3000);
+    }
+
+    // ============================================
+    // GAME LOOP
+    // ============================================
+    let lastTime = 0;
+    let frameCount = 0;
+    let fpsTime = 0;
+    let currentFPS = 0;
+
+    function gameLoop(time) {
+      const dt = Math.min((time - lastTime) / 1000, 0.1);
+      lastTime = time;
+      
+      // FPS counter
+      frameCount++;
+      fpsTime += dt;
+      if (fpsTime >= 0.5) {
+        currentFPS = Math.round(frameCount / fpsTime);
+        document.getElementById('fps-counter').textContent = currentFPS;
+        frameCount = 0;
+        fpsTime = 0;
+      }
+      
+      // Input
+      let speed = CONFIG.MOVE_SPEED * dt;
+      if (input.isPressed('ShiftLeft') || input.isPressed('ShiftRight')) {
+        speed *= CONFIG.RUN_MULTIPLIER;
+      }
+      
+      // Movement
+      let forward = 0, strafe = 0;
+      if (input.isPressed('KeyW') || input.isPressed('ArrowUp')) forward += speed;
+      if (input.isPressed('KeyS') || input.isPressed('ArrowDown')) forward -= speed;
+      if (input.isPressed('KeyA')) strafe -= speed;
+      if (input.isPressed('KeyD')) strafe += speed;
+      
+      if (forward !== 0 || strafe !== 0) {
+        player.move(forward, strafe);
+      }
+      
+      // Mouse look
+      const mouseDX = input.consumeMouseDelta();
+      if (mouseDX !== 0) {
+        player.angle += mouseDX * CONFIG.MOUSE_SENSITIVITY;
+      }
+      
+      // Keyboard turning
+      if (input.isPressed('ArrowLeft')) player.angle -= CONFIG.KEY_TURN_SPEED * dt;
+      if (input.isPressed('ArrowRight')) player.angle += CONFIG.KEY_TURN_SPEED * dt;
+      
+      // Normalize angle
+      while (player.angle < 0) player.angle += Math.PI * 2;
+      while (player.angle >= Math.PI * 2) player.angle -= Math.PI * 2;
+      
+      // Update systems
+      fogOfWar.update();
+      
+      // Render
+      const wallData = raycaster.cast();
+      glRenderer.render(wallData);
+      overlay.render();
+      minimap.render();
+      updateUI();
+      
+      requestAnimationFrame(gameLoop);
+    }
+
+    // ============================================
+    // INIT
+    // ============================================
+    function init() {
+      LEVEL.init();
+      player.init();
+      input.init();
+      fogOfWar.init();
+      minimap.init();
+      overlay.init();
+      
+      if (!glRenderer.init()) {
+        showMessage('WebGL2 not available - falling back');
+        return;
+      }
+      
+      fogOfWar.update();
+      
+      showMessage('INSTALLATION ALPHA v2 - GPU Accelerated');
+      showMessage('Click viewport for mouse control');
+      
+      requestAnimationFrame(gameLoop);
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  </script>
+</body>
+</html>
