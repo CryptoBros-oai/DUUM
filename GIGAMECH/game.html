@@ -84,7 +84,7 @@
         <div class="panel-title">📊 MECH STATUS</div>
         <div class="perf-row"><span>Chassis</span><span class="perf-value" id="mech-chassis">CENTURION</span></div>
         <div class="perf-row"><span>Tonnage</span><span class="perf-value">50 tons</span></div>
-        <div class="perf-row"><span>Max Speed</span><span class="perf-value">86 KPH</span></div>
+        <div class="perf-row"><span>Max Speed</span><span class="perf-value">54 KPH</span></div>
         <div class="perf-row"><span>Armor</span><span class="perf-value" id="mech-armor">100%</span></div>
       </div>
     </div>
@@ -855,14 +855,14 @@ class CockpitHUD {
     ctx.fill();
     ctx.stroke();
 
-    // Panel details (rivets/screws)
+    // Panel details (rivets/screws) - reduced count for perf
     ctx.fillStyle = '#333';
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 4; i++) {
       ctx.beginPath();
-      ctx.arc(w * 0.05, h * 0.1 + i * (h * 0.08), 3, 0, Math.PI * 2);
+      ctx.arc(w * 0.05, h * 0.15 + i * (h * 0.15), 3, 0, Math.PI * 2);
       ctx.fill();
       ctx.beginPath();
-      ctx.arc(w * 0.95, h * 0.1 + i * (h * 0.08), 3, 0, Math.PI * 2);
+      ctx.arc(w * 0.95, h * 0.15 + i * (h * 0.15), 3, 0, Math.PI * 2);
       ctx.fill();
     }
   }
@@ -1047,12 +1047,9 @@ class CockpitHUD {
     const valueAngle = startAngle + (Math.min(value, max) / max) * arcRange;
     ctx.strokeStyle = color;
     ctx.lineWidth = 4;
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 5;
     ctx.beginPath();
     ctx.arc(x, y, r - 6, startAngle, valueAngle);
     ctx.stroke();
-    ctx.shadowBlur = 0;
 
     // Tick marks
     ctx.strokeStyle = '#444';
@@ -1147,45 +1144,69 @@ class CockpitHUD {
 
     // Velocity vector indicator (shows direction of actual movement)
     if (velocityAngle !== null && speed > 2) {
-      // Calculate screen position of velocity vector relative to torso angle
-      const relativeAngle = velocityAngle - mech.torsoAngle;
+      // Calculate relative angle between movement direction and where torso is facing
+      let relativeAngle = velocityAngle - mech.torsoAngle;
+      // Normalize to -PI to PI
+      while (relativeAngle > Math.PI) relativeAngle -= Math.PI * 2;
+      while (relativeAngle < -Math.PI) relativeAngle += Math.PI * 2;
 
-      // Project onto screen (limited range)
-      const maxOffset = 80;
-      const vvX = cx + Math.sin(relativeAngle) * Math.min(speed * 2, maxOffset);
-      const vvY = cy - Math.cos(relativeAngle) * Math.min(speed * 0.8, maxOffset * 0.4);
+      // Project onto screen - horizontal offset based on angle difference
+      // When moving where you're looking, marker is centered
+      // When moving sideways/backwards, marker shifts to show that
+      const maxOffsetX = w * 0.3;  // Max horizontal offset
+      const maxOffsetY = h * 0.15; // Max vertical offset
 
-      // Velocity vector marker (flight path marker style)
-      ctx.strokeStyle = '#ffaa00';
-      ctx.lineWidth = 2;
+      // Use sin for horizontal (left/right of view) and cos for depth feel
+      const vvX = cx + Math.sin(relativeAngle) * maxOffsetX;
+      // Vertical offset: moving backward = marker goes up, forward = down slightly
+      const vvY = cy - Math.cos(relativeAngle) * maxOffsetY * 0.5 + maxOffsetY * 0.3;
 
-      // Circle
-      ctx.beginPath();
-      ctx.arc(vvX, vvY, 8, 0, Math.PI * 2);
-      ctx.stroke();
+      // Only draw if the marker would be reasonably on screen
+      if (Math.abs(relativeAngle) < Math.PI * 0.8) {
+        // Velocity vector marker (flight path marker style)
+        ctx.strokeStyle = '#ffaa00';
+        ctx.lineWidth = 2;
 
-      // Wings
-      ctx.beginPath();
-      ctx.moveTo(vvX - 8, vvY);
-      ctx.lineTo(vvX - 16, vvY);
-      ctx.moveTo(vvX + 8, vvY);
-      ctx.lineTo(vvX + 16, vvY);
-      // Tail
-      ctx.moveTo(vvX, vvY + 8);
-      ctx.lineTo(vvX, vvY + 14);
-      ctx.stroke();
+        // Circle
+        ctx.beginPath();
+        ctx.arc(vvX, vvY, 10, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Wings (horizontal lines)
+        ctx.beginPath();
+        ctx.moveTo(vvX - 10, vvY);
+        ctx.lineTo(vvX - 20, vvY);
+        ctx.moveTo(vvX + 10, vvY);
+        ctx.lineTo(vvX + 20, vvY);
+        // Tail (vertical line down)
+        ctx.moveTo(vvX, vvY + 10);
+        ctx.lineTo(vvX, vvY + 18);
+        ctx.stroke();
+      } else {
+        // Moving mostly backwards - show indicator at edge
+        const edgeX = relativeAngle > 0 ? w * 0.85 : w * 0.15;
+        ctx.strokeStyle = '#ff6600';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(edgeX, cy - 15);
+        ctx.lineTo(edgeX + (relativeAngle > 0 ? 10 : -10), cy);
+        ctx.lineTo(edgeX, cy + 15);
+        ctx.stroke();
+        ctx.fillStyle = '#ff6600';
+        ctx.font = '10px "Share Tech Mono"';
+        ctx.textAlign = 'center';
+        ctx.fillText('REV', edgeX, cy + 28);
+        ctx.textAlign = 'left';
+      }
     }
 
     // Speed readout (large, center bottom)
     ctx.fillStyle = '#33ff33';
     ctx.font = 'bold 28px "Orbitron"';
     ctx.textAlign = 'center';
-    ctx.shadowColor = '#33ff33';
-    ctx.shadowBlur = 10;
     ctx.fillText(speed.toFixed(0), cx, h * 0.88);
     ctx.font = '12px "Share Tech Mono"';
     ctx.fillStyle = '#666';
-    ctx.shadowBlur = 0;
     ctx.fillText('KPH', cx, h * 0.91);
     ctx.textAlign = 'left';
   }
@@ -1234,16 +1255,12 @@ class CockpitHUD {
 
       if (isOn) {
         ctx.fillStyle = light.color;
-        ctx.shadowColor = light.color;
-        ctx.shadowBlur = 8;
       } else {
         ctx.fillStyle = '#222';
-        ctx.shadowBlur = 0;
       }
       ctx.beginPath();
       ctx.arc(lx, ly, 4, 0, Math.PI * 2);
       ctx.fill();
-      ctx.shadowBlur = 0;
 
       // Label
       ctx.fillStyle = '#555';
@@ -1402,9 +1419,10 @@ const mech = {
   torsoAngle: 0,
   velocity: { x: 0, y: 0 },
   throttle: 0,
-  maxSpeed: 86,
-  acceleration: 25,
-  turnRate: 1.0,
+  maxSpeed: 54,        // Reduced from 86 - more mech-like (was way too fast)
+  acceleration: 8,     // Reduced from 25 - slower to build up speed
+  deceleration: 12,    // Slightly faster braking than accel
+  turnRate: 0.6,       // Reduced from 1.0 - mechs are lumbering
   torsoTurnRate: 2.5,
   torsoTwistLimit: Math.PI / 2.5,
   heat: 0,
@@ -1480,14 +1498,13 @@ function gameLoop(time) {
 
   // ─── INPUT PROCESSING ───
 
+  // Throttle is a LEVER - stays where you set it (no decay!)
   if (input.keys['KeyW']) {
-    mech.throttle = Math.min(1, mech.throttle + dt * 0.8);
+    mech.throttle = Math.min(1, mech.throttle + dt * 0.4); // Slower ramp up
   } else if (input.keys['KeyS']) {
-    mech.throttle = Math.max(-0.3, mech.throttle - dt * 0.8);
-  } else {
-    mech.throttle *= 0.95;
-    if (Math.abs(mech.throttle) < 0.01) mech.throttle = 0;
+    mech.throttle = Math.max(-0.3, mech.throttle - dt * 0.4); // Slower ramp down
   }
+  // NO ELSE - throttle stays where it is!
 
   if (input.keys['KeyA']) mech.legAngle -= mech.turnRate * dt;
   if (input.keys['KeyD']) mech.legAngle += mech.turnRate * dt;
@@ -1520,13 +1537,17 @@ function gameLoop(time) {
   const targetSpeed = mech.throttle * mech.maxSpeed / 3.6;
   const currentSpeed = Math.sqrt(mech.velocity.x ** 2 + mech.velocity.y ** 2);
   const speedDiff = targetSpeed - currentSpeed;
-  const accel = Math.sign(speedDiff) * Math.min(Math.abs(speedDiff), mech.acceleration * dt);
+
+  // Use acceleration when speeding up, deceleration when slowing down
+  const accelRate = speedDiff > 0 ? mech.acceleration : mech.deceleration;
+  const accel = Math.sign(speedDiff) * Math.min(Math.abs(speedDiff), accelRate * dt);
 
   const targetVelX = Math.cos(mech.legAngle) * (currentSpeed + accel);
   const targetVelY = Math.sin(mech.legAngle) * (currentSpeed + accel);
 
-  mech.velocity.x += (targetVelX - mech.velocity.x) * 0.1;
-  mech.velocity.y += (targetVelY - mech.velocity.y) * 0.1;
+  // Slower velocity blending for heavier mech feel
+  mech.velocity.x += (targetVelX - mech.velocity.x) * 0.05;
+  mech.velocity.y += (targetVelY - mech.velocity.y) * 0.05;
 
   mechMovement.move(mech, dt);
 
