@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GIGAMECH - Overworld Alpha</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700&display=swap');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0a0a0c; color: #33ff33; font-family: 'Share Tech Mono', monospace; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
+    #header { background: linear-gradient(180deg, #1a1a1f 0%, #0d0d10 100%); border-bottom: 2px solid #33ff33; padding: 8px 16px; display: flex; justify-content: space-between; align-items: center; }
+    #header h1 { font-family: 'Orbitron', sans-serif; font-size: 1rem; letter-spacing: 3px; }
+    .tag { font-size: 0.5rem; color: #ff9933; margin-left: 8px; letter-spacing: 2px; background: rgba(255,153,51,0.15); padding: 2px 6px; border-radius: 3px; }
+    #stats { display: flex; gap: 16px; font-size: 0.7rem; }
+    .stat { display: flex; flex-direction: column; align-items: center; }
+    .stat-label { color: #555; font-size: 0.55rem; letter-spacing: 1px; }
+    .stat-value { color: #33ff33; } .stat-value.warn { color: #ffaa33; } .stat-value.danger { color: #ff3333; }
+    #main { flex: 1; display: flex; padding: 8px; min-height: 0; gap: 8px; }
+    #viewport { flex: 2; position: relative; border: 2px solid #1a1a1a; border-radius: 4px; overflow: hidden; background: #000; }
+    #game-canvas { width: 100%; height: 100%; display: block; }
+    #overlay-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+    #click-prompt { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.9); border: 1px solid #33ff33; padding: 14px 28px; text-align: center; cursor: pointer; z-index: 10; }
+    #click-prompt:hover { background: rgba(51,255,51,0.1); }
+    #click-prompt.hidden { display: none; }
+    #click-prompt h2 { font-family: 'Orbitron', sans-serif; font-size: 0.85rem; letter-spacing: 2px; }
+    #sidebar { width: 280px; display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
+    .panel { background: #0f0f12; border: 1px solid #222; border-radius: 4px; padding: 8px; }
+    .panel-title { font-family: 'Orbitron', sans-serif; font-size: 0.6rem; letter-spacing: 2px; color: #444; margin-bottom: 6px; }
+    #minimap-panel { height: 200px; display: flex; flex-direction: column; }
+    #minimap-canvas { flex: 1; width: 100%; border: 1px solid #1a1a1a; background: #030305; }
+    .perf-row { display: flex; justify-content: space-between; font-size: 0.65rem; color: #666; margin-bottom: 3px; }
+    .perf-value { color: #33ff33; min-width: 55px; text-align: right; }
+    .slider-row { display: flex; justify-content: space-between; align-items: center; font-size: 0.6rem; color: #888; margin-bottom: 4px; }
+    .slider-row input[type="range"] { width: 80px; }
+    .slider-value { color: #33ff33; min-width: 35px; text-align: right; }
+    .control-row { display: flex; justify-content: space-between; font-size: 0.6rem; color: #888; margin-bottom: 3px; }
+    .key { background: #1a1a1f; border: 1px solid #2a2a2a; padding: 1px 4px; border-radius: 2px; color: #33ff33; font-size: 0.55rem; }
+    #messages { position: absolute; bottom: 10px; left: 10px; max-width: 300px; z-index: 5; }
+    .message { background: rgba(0,0,0,0.85); border-left: 2px solid #33ff33; padding: 4px 8px; margin-bottom: 2px; font-size: 0.7rem; animation: msgIn 0.2s ease-out, msgOut 0.3s ease-in 3s forwards; }
+    @keyframes msgIn { from { opacity: 0; transform: translateX(-10px); } }
+    @keyframes msgOut { to { opacity: 0; } }
+    /* Mech-specific HUD elements */
+    #torso-indicator { position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%); font-size: 0.6rem; color: #33ff33; opacity: 0.7; }
+    #heat-bar { position: absolute; right: 20px; top: 50%; transform: translateY(-50%); width: 20px; height: 150px; border: 1px solid #33ff33; background: rgba(0,0,0,0.5); }
+    #heat-fill { position: absolute; bottom: 0; width: 100%; background: linear-gradient(to top, #33ff33, #ffaa33, #ff3333); transition: height 0.1s; }
+    #heat-label { position: absolute; right: 45px; top: 50%; transform: translateY(-50%) rotate(-90deg); font-size: 0.6rem; color: #555; letter-spacing: 2px; }
+    #speed-display { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); font-family: 'Orbitron', sans-serif; font-size: 1.5rem; color: #33ff33; text-shadow: 0 0 10px #33ff33; }
+    #throttle-bar { position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%); width: 200px; height: 8px; border: 1px solid #33ff33; background: rgba(0,0,0,0.5); }
+    #throttle-fill { height: 100%; background: #33ff33; transition: width 0.1s; }
+  </style>
+</head>
+<body>
+  <div id="header">
+    <h1>GIGAMECH <span class="tag">OVERWORLD ALPHA</span></h1>
+    <div id="stats">
+      <div class="stat"><span class="stat-label">FPS</span><span class="stat-value" id="stat-fps">--</span></div>
+      <div class="stat"><span class="stat-label">FRAME</span><span class="stat-value" id="stat-frame">--</span></div>
+      <div class="stat"><span class="stat-label">HEAT</span><span class="stat-value" id="stat-heat">--</span></div>
+      <div class="stat"><span class="stat-label">SPEED</span><span class="stat-value" id="stat-speed">--</span></div>
+      <div class="stat"><span class="stat-label">SECTOR</span><span class="stat-value" id="stat-sector">--</span></div>
+    </div>
+  </div>
+  <div id="main">
+    <div id="viewport">
+      <canvas id="game-canvas"></canvas>
+      <canvas id="overlay-canvas"></canvas>
+      <div id="click-prompt"><h2>[ ENGAGE REACTOR ]</h2></div>
+      <div id="messages"></div>
+      <!-- Mech HUD elements -->
+      <div id="heat-label">HEAT</div>
+      <div id="heat-bar"><div id="heat-fill" style="height: 0%"></div></div>
+      <div id="speed-display">0 KPH</div>
+      <div id="throttle-bar"><div id="throttle-fill" style="width: 50%"></div></div>
+      <div id="torso-indicator">◄ TORSO ►</div>
+    </div>
+    <div id="sidebar">
+      <div class="panel" id="minimap-panel"><div class="panel-title">TACTICAL MAP</div><canvas id="minimap-canvas"></canvas></div>
+      <div class="panel">
+        <div class="panel-title">⚡ PERFORMANCE</div>
+        <div class="perf-row"><span>Frame Total</span><span class="perf-value" id="perf-frame">--</span></div>
+        <div class="perf-row"><span>├ Walls</span><span class="perf-value" id="perf-walls">--</span></div>
+        <div class="perf-row"><span>├ Floors</span><span class="perf-value" id="perf-floors">--</span></div>
+        <div class="perf-row"><span>└ Sprites</span><span class="perf-value" id="perf-sprites">--</span></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">🎛️ RENDER</div>
+        <div class="slider-row"><span>Rays</span><input type="range" id="tune-rays" min="200" max="800" value="500"><span class="slider-value" id="tune-rays-val">500</span></div>
+        <div class="slider-row"><span>View</span><input type="range" id="tune-viewdist" min="12" max="32" value="20"><span class="slider-value" id="tune-viewdist-val">20</span></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">🤖 MECH CONTROLS</div>
+        <div class="control-row"><span>Throttle</span><span><span class="key">W</span><span class="key">S</span></span></div>
+        <div class="control-row"><span>Turn Legs</span><span><span class="key">A</span><span class="key">D</span></span></div>
+        <div class="control-row"><span>Torso</span><span>Mouse</span></div>
+        <div class="control-row"><span>Flashlight</span><span><span class="key">F</span></span></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">📊 MECH STATUS</div>
+        <div class="perf-row"><span>Chassis</span><span class="perf-value" id="mech-chassis">CENTURION</span></div>
+        <div class="perf-row"><span>Tonnage</span><span class="perf-value">50 tons</span></div>
+        <div class="perf-row"><span>Max Speed</span><span class="perf-value">86 KPH</span></div>
+        <div class="perf-row"><span>Armor</span><span class="perf-value" id="mech-armor">100%</span></div>
+      </div>
+    </div>
+  </div>
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// GIGAMECH - OVERWORLD ALPHA
+// Built on SectorEngine - A 2.5D Mech Combat Game
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ─── PROFILER ───
+class Profiler {
+  constructor() { this.t = {}; this.h = {}; }
+  start(n) { this.t[n] = performance.now(); }
+  end(n) { if (!this.t[n]) return; const d = performance.now() - this.t[n]; if (!this.h[n]) this.h[n] = []; this.h[n].push(d); if (this.h[n].length > 60) this.h[n].shift(); }
+  getAvg(n) { const h = this.h[n]; return h?.length ? h.reduce((a,b)=>a+b,0)/h.length : 0; }
+}
+const profiler = new Profiler();
+
+// ─── SPRITE SYSTEM ───
+class Sprite {
+  constructor(cfg) {
+    this.x = cfg.x||0;
+    this.y = cfg.y||0;
+    this.texture = cfg.texture||0;
+    this.scale = cfg.scale||1;
+    this.type = cfg.type||'decoration';
+    this.active = true;
+    this.screenX = 0;
+    this.distance = 0;
+  }
+}
+
+class SpriteManager {
+  constructor() { this.sprites = []; this.visible = []; }
+  add(cfg) { const s = new Sprite(cfg); this.sprites.push(s); return s; }
+  update(px, py, angle, fov, maxDist) {
+    const halfFov = fov/2, cosA = Math.cos(-angle), sinA = Math.sin(-angle);
+    this.visible = [];
+    for (const s of this.sprites) {
+      if (!s.active) continue;
+      const dx = s.x - px, dy = s.y - py;
+      const camY = dx * cosA - dy * sinA, camX = dx * sinA + dy * cosA;
+      if (camY <= 0.1 || camY > maxDist) continue;
+      if (Math.abs(Math.atan2(camX, camY)) > halfFov + 0.3) continue;
+      s.screenX = camX / camY; s.distance = camY;
+      this.visible.push(s);
+    }
+    this.visible.sort((a, b) => b.distance - a.distance);
+  }
+  getVisible() { return this.visible; }
+}
+
+// ─── SPRITE TEXTURE GENERATOR - OUTDOOR THEMED ───
+class SpriteTexGen {
+  constructor(s=64) { this.s = s; }
+  _n(x,y,seed=0) { const n = Math.sin(x*12.9898+y*78.233+seed)*43758.5453; return n-Math.floor(n); }
+
+  // Pine tree
+  tree(seed=0) {
+    const s=this.s, d=new Uint8Array(s*s*4), cx=s/2;
+    for(let y=0;y<s;y++) for(let x=0;x<s;x++) {
+      const i=(y*s+x)*4;
+      // Trunk
+      const trunkW = s*0.08;
+      const inTrunk = Math.abs(x-cx) < trunkW && y > s*0.6;
+      // Foliage (triangle shape)
+      const treeTop = s*0.1;
+      const treeBot = s*0.7;
+      const progress = (y - treeTop) / (treeBot - treeTop);
+      const width = progress * s * 0.4;
+      const inFoliage = y >= treeTop && y <= treeBot && Math.abs(x-cx) < width;
+
+      if (inTrunk) {
+        const n = this._n(x,y,seed) * 30;
+        d[i] = 60 + n; d[i+1] = 40 + n; d[i+2] = 25 + n; d[i+3] = 255;
+      } else if (inFoliage) {
+        const n = this._n(x*2,y*2,seed) * 40;
+        const shade = 1 - Math.abs(x-cx)/(width+1) * 0.3;
+        d[i] = (30 + n) * shade; d[i+1] = (70 + n) * shade; d[i+2] = (30 + n*0.5) * shade; d[i+3] = 255;
+      } else {
+        d[i]=d[i+1]=d[i+2]=d[i+3]=0;
+      }
+    }
+    return d;
+  }
+
+  // Deciduous tree (rounder)
+  tree2(seed=0) {
+    const s=this.s, d=new Uint8Array(s*s*4), cx=s/2, cy=s*0.35;
+    for(let y=0;y<s;y++) for(let x=0;x<s;x++) {
+      const i=(y*s+x)*4;
+      // Trunk
+      const inTrunk = Math.abs(x-cx) < s*0.06 && y > s*0.5;
+      // Foliage (circle)
+      const dx = x-cx, dy = y-cy;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      const inFoliage = dist < s*0.35 && y < s*0.65;
+
+      if (inTrunk) {
+        const n = this._n(x,y,seed) * 25;
+        d[i] = 70 + n; d[i+1] = 50 + n; d[i+2] = 30 + n; d[i+3] = 255;
+      } else if (inFoliage) {
+        const n = this._n(x*3,y*3,seed) * 50;
+        const shade = 1 - dist/(s*0.35) * 0.4;
+        d[i] = (40 + n*0.5) * shade; d[i+1] = (90 + n) * shade; d[i+2] = (35 + n*0.3) * shade; d[i+3] = 255;
+      } else {
+        d[i]=d[i+1]=d[i+2]=d[i+3]=0;
+      }
+    }
+    return d;
+  }
+
+  // Building/structure
+  building(seed=0) {
+    const s=this.s, d=new Uint8Array(s*s*4), cx=s/2;
+    const bw = s*0.4, bh = s*0.8;
+    for(let y=0;y<s;y++) for(let x=0;x<s;x++) {
+      const i=(y*s+x)*4;
+      const inBuilding = Math.abs(x-cx) < bw && y > s-bh;
+      if (!inBuilding) { d[i]=d[i+1]=d[i+2]=d[i+3]=0; continue; }
+
+      const n = this._n(x,y,seed) * 15;
+      // Windows
+      const wx = ((x-cx+bw) % 12) < 6;
+      const wy = (y % 14) < 8 && y < s-10;
+      const isWindow = wx && wy && y > s*0.3;
+
+      if (isWindow) {
+        const glow = this._n(Math.floor(x/12), Math.floor(y/14), seed+50) > 0.5;
+        if (glow) {
+          d[i] = 180; d[i+1] = 170; d[i+2] = 120; d[i+3] = 255;
+        } else {
+          d[i] = 30; d[i+1] = 40; d[i+2] = 50; d[i+3] = 255;
+        }
+      } else {
+        d[i] = 90 + n; d[i+1] = 85 + n; d[i+2] = 80 + n; d[i+3] = 255;
+      }
+    }
+    return d;
+  }
+
+  // Rock/boulder
+  rock(seed=0) {
+    const s=this.s, d=new Uint8Array(s*s*4), cx=s/2, cy=s*0.55;
+    for(let y=0;y<s;y++) for(let x=0;x<s;x++) {
+      const i=(y*s+x)*4;
+      const dx = (x-cx)/(s*0.4), dy = (y-cy)/(s*0.35);
+      const dist = dx*dx + dy*dy;
+      if (dist > 1) { d[i]=d[i+1]=d[i+2]=d[i+3]=0; continue; }
+
+      const n = this._n(x*2,y*2,seed) * 40;
+      const shade = 1 - dist * 0.3 - dx * 0.2;
+      d[i] = (100 + n) * shade; d[i+1] = (95 + n) * shade; d[i+2] = (85 + n) * shade; d[i+3] = 255;
+    }
+    return d;
+  }
+
+  // Destroyed mech (wreckage)
+  wreckage(seed=0) {
+    const s=this.s, d=new Uint8Array(s*s*4), cx=s/2;
+    for(let y=0;y<s;y++) for(let x=0;x<s;x++) {
+      const i=(y*s+x)*4;
+      // Tilted mech torso shape
+      const tilt = (y/s) * 10;
+      const inBody = Math.abs(x-cx-tilt) < s*0.25 && y > s*0.3;
+
+      if (!inBody) { d[i]=d[i+1]=d[i+2]=d[i+3]=0; continue; }
+
+      const n = this._n(x,y,seed) * 30;
+      const damaged = this._n(x*3,y*3,seed+100) > 0.7;
+
+      if (damaged) {
+        d[i] = 40 + n; d[i+1] = 35 + n; d[i+2] = 30 + n; d[i+3] = 255;
+      } else {
+        d[i] = 70 + n; d[i+1] = 75 + n; d[i+2] = 65 + n; d[i+3] = 255;
+      }
+    }
+    return d;
+  }
+
+  // Radio tower
+  tower(seed=0) {
+    const s=this.s, d=new Uint8Array(s*s*4), cx=s/2;
+    for(let y=0;y<s;y++) for(let x=0;x<s;x++) {
+      const i=(y*s+x)*4;
+      // Main pole
+      const inPole = Math.abs(x-cx) < s*0.03;
+      // Cross beams
+      const beamY = y % 16 < 3;
+      const beamWidth = (1 - y/s) * s * 0.3;
+      const inBeam = beamY && Math.abs(x-cx) < beamWidth && y < s*0.9;
+      // Dish at top
+      const inDish = y < s*0.15 && Math.abs(x-cx) < s*0.15;
+
+      if (inPole || inBeam || inDish) {
+        const n = this._n(x,y,seed) * 20;
+        d[i] = 120 + n; d[i+1] = 115 + n; d[i+2] = 110 + n; d[i+3] = 255;
+      } else {
+        d[i]=d[i+1]=d[i+2]=d[i+3]=0;
+      }
+    }
+    return d;
+  }
+}
+
+// ─── LIGHTING SYSTEM ───
+class LightingSystem {
+  constructor() { this.lights=[]; this.ambientLevel=0.25; this.time=0; this._pos=new Float32Array(16*2); this._col=new Float32Array(16*3); this._par=new Float32Array(16*2); }
+  addLight(c) {
+    if(this.lights.length>=16) return null;
+    const l={id:this.lights.length,x:c.x||0,y:c.y||0,radius:c.radius||5,intensity:c.intensity||1,color:c.color||[1,0.95,0.85],flicker:c.flicker||0,flickerOffset:Math.random()*100,pulse:c.pulse||0,pulseMin:c.pulseMin||0.5,active:true,type:c.type||'point',currentIntensity:c.intensity||1};
+    this.lights.push(l); return l;
+  }
+  update(dt,px,py,angle) {
+    this.time+=dt;
+    for(const l of this.lights) {
+      if(l.type==='player') { l.x=px+Math.cos(angle)*0.3; l.y=py+Math.sin(angle)*0.3; }
+      l.currentIntensity=l.intensity;
+      if(l.flicker>0) { const fn=Math.sin(this.time*15+l.flickerOffset)*0.3+Math.sin(this.time*23+l.flickerOffset*2)*0.2; l.currentIntensity*=1+fn*l.flicker*0.3; }
+      if(l.pulse>0) { const pv=(Math.sin(this.time*l.pulse)+1)*0.5; l.currentIntensity*=l.pulseMin+(1-l.pulseMin)*pv; }
+      l.currentIntensity=Math.max(0,Math.min(2,l.currentIntensity));
+    }
+  }
+  getLightData() {
+    let count=0;
+    for(const l of this.lights) { if(!l.active||count>=16) continue; this._pos[count*2]=l.x; this._pos[count*2+1]=l.y; this._col[count*3]=l.color[0]; this._col[count*3+1]=l.color[1]; this._col[count*3+2]=l.color[2]; this._par[count*2]=l.radius; this._par[count*2+1]=l.currentIntensity; count++; }
+    return {positions:this._pos,colors:this._col,params:this._par,count};
+  }
+  calcLightAt(wx,wy) {
+    let total=this.ambientLevel, tR=0,tG=0,tB=0;
+    for(const l of this.lights) { if(!l.active) continue; const dx=wx-l.x,dy=wy-l.y,dist=Math.sqrt(dx*dx+dy*dy); let a=Math.max(0,1-dist/l.radius); a=a*a*l.currentIntensity; total+=a; tR+=l.color[0]*a; tG+=l.color[1]*a; tB+=l.color[2]*a; }
+    return {intensity:Math.min(total,2),tint:[tR,tG,tB]};
+  }
+  setAmbient(v) { this.ambientLevel=v; }
+}
+
+// ─── WALL TEXTURE GENERATOR ───
+class TexGen {
+  constructor(s=64) { this.s=s; }
+  _n(x,y,seed=0) { const n=Math.sin(x*12.9898+y*78.233+seed)*43758.5453; return n-Math.floor(n); }
+  _fbm(x,y,oct=4,seed=0) { let v=0,a=0.5,f=1; for(let i=0;i<oct;i++) { v+=a*this._n(x*f,y*f,seed+i*100); a*=0.5; f*=2; } return v; }
+  gen(fn,...args) { const s=this.s,d=new Uint8Array(s*s*4); for(let y=0;y<s;y++) for(let x=0;x<s;x++) { const[r,g,b]=fn.call(this,x,y,s,...args); const i=(y*s+x)*4; d[i]=r; d[i+1]=g; d[i+2]=b; d[i+3]=255; } return d; }
+  // Outdoor wall textures
+  cliff(x,y,s,base,seed) { const n=this._fbm(x/4,y/8,4,seed)*60; return [Math.max(0,Math.min(255,base[0]+n)),Math.max(0,Math.min(255,base[1]+n-5)),Math.max(0,Math.min(255,base[2]+n-10))]; }
+  brick(x,y,s,base,seed) { const row=Math.floor(y/8),ox=(row%2)*8,bx=(x+ox)%16,by=y%8; if(bx<2||by<2) return [55,52,48]; const bv=(this._n(Math.floor((x+ox)/16)+row*1000,0,seed)-0.5)*60; return [Math.max(0,Math.min(255,base[0]+bv)),Math.max(0,Math.min(255,base[1]+bv*0.8)),Math.max(0,Math.min(255,base[2]+bv*0.6))]; }
+  concrete(x,y,s,base,seed) { const t=this._fbm(x/4,y/4,4,seed)*50-25; return [Math.max(0,Math.min(255,base[0]+t)),Math.max(0,Math.min(255,base[1]+t)),Math.max(0,Math.min(255,base[2]+t))]; }
+  // Floor textures
+  grass(x,y,s,base,seed) { const n=this._fbm(x/3,y/3,4,seed)*40-20; const blade=this._n(x*10,y*10,seed)>0.85?20:0; return [Math.max(0,Math.min(255,base[0]+n)),Math.max(0,Math.min(255,base[1]+n+blade)),Math.max(0,Math.min(255,base[2]+n))]; }
+  dirt(x,y,s,base,seed) { const n=this._fbm(x/4,y/4,4,seed)*50-25; return [Math.max(0,Math.min(255,base[0]+n)),Math.max(0,Math.min(255,base[1]+n*0.9)),Math.max(0,Math.min(255,base[2]+n*0.7))]; }
+  sand(x,y,s,base,seed) { const n=this._fbm(x/5,y/5,3,seed)*30-15; return [Math.max(0,Math.min(255,base[0]+n)),Math.max(0,Math.min(255,base[1]+n)),Math.max(0,Math.min(255,base[2]+n*0.8))]; }
+  road(x,y,s,base,seed) { const stripe=(Math.abs(x-s/2)<3&&(y%20)<12)?1:0; if(stripe) return [200,180,50]; const n=this._n(x,y,seed)*15; return [Math.max(0,Math.min(255,base[0]+n)),Math.max(0,Math.min(255,base[1]+n)),Math.max(0,Math.min(255,base[2]+n))]; }
+  // Ceiling/sky
+  sky(x,y,s,base,seed) { if(this._n(x*5,y*5,seed)>0.97) return [220,220,240]; return [base[0],base[1],base[2]]; }
+}
+
+// ─── WEBGL2 RENDERER ───
+class Renderer {
+  constructor(cfg={}) { this.rayCount=cfg.rayCount||500; this.fov=cfg.fov||Math.PI*0.55; this.maxDepth=cfg.maxDepth||20; this.texGen=new TexGen(64); this.spriteTexGen=new SpriteTexGen(64); this.drawCalls=0; this.spriteCount=0; }
+
+  init(canvas) {
+    this.canvas=canvas; this.gl=canvas.getContext('webgl2',{antialias:false,alpha:false});
+    if(!this.gl) return false;
+    this._initWallProg(); this._initFloorProg(); this._initSpriteProg();
+    this._initBuffers(); this._initTextures(); this._initSpriteTextures(); this._initWorldTex();
+    this.resize(); window.addEventListener('resize',()=>this.resize());
+    return true;
+  }
+
+  resize() { const c=this.canvas.parentElement; this.width=c.clientWidth; this.height=c.clientHeight; this.canvas.width=this.width; this.canvas.height=this.height; this.gl.viewport(0,0,this.width,this.height); }
+  _compile(type,src) { const gl=this.gl,s=gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s); if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(s)); return s; }
+  _program(vs,fs) { const gl=this.gl,p=gl.createProgram(); gl.attachShader(p,this._compile(gl.VERTEX_SHADER,vs)); gl.attachShader(p,this._compile(gl.FRAGMENT_SHADER,fs)); gl.linkProgram(p); return p; }
+
+  _initWallProg() {
+    const vs=`#version 300 es
+      in vec2 aPos; in vec2 aUV; in float aTex; in float aFog; in float aSide; in vec2 aWP;
+      out vec2 vUV; flat out int vTex; out float vFog; out float vSide; out vec2 vWP;
+      void main() { gl_Position=vec4(aPos,0,1); vUV=aUV; vTex=int(aTex); vFog=aFog; vSide=aSide; vWP=aWP; }`;
+    const fs=`#version 300 es
+      precision highp float; precision highp sampler2DArray;
+      in vec2 vUV; flat in int vTex; in float vFog; in float vSide; in vec2 vWP;
+      uniform sampler2DArray uTex; uniform float uAmb; uniform int uLC; uniform vec2 uLP[16]; uniform vec3 uLCol[16]; uniform vec2 uLPar[16];
+      out vec4 fc;
+      void main() {
+        vec3 c=texture(uTex,vec3(fract(vUV),float(vTex))).rgb; c*=mix(1.0,0.75,vSide);
+        float tl=uAmb; vec3 tint=vec3(0);
+        for(int i=0;i<16;i++) { if(i>=uLC) break; float d=distance(vWP,uLP[i]); float a=max(0.0,1.0-d/uLPar[i].x); a=a*a*uLPar[i].y; tl+=a; tint+=uLCol[i]*a; }
+        c*=min(tl,2.0); if(length(tint)>0.01) c*=normalize(vec3(1)+tint*0.5);
+        c=mix(c,vec3(0.55,0.60,0.70),vFog); fc=vec4(c,1);
+      }`;
+    this.wallProg=this._program(vs,fs);
+    const gl=this.gl;
+    this.wA={pos:gl.getAttribLocation(this.wallProg,'aPos'),uv:gl.getAttribLocation(this.wallProg,'aUV'),tex:gl.getAttribLocation(this.wallProg,'aTex'),fog:gl.getAttribLocation(this.wallProg,'aFog'),side:gl.getAttribLocation(this.wallProg,'aSide'),wp:gl.getAttribLocation(this.wallProg,'aWP')};
+    this.wU={tex:gl.getUniformLocation(this.wallProg,'uTex'),amb:gl.getUniformLocation(this.wallProg,'uAmb'),lc:gl.getUniformLocation(this.wallProg,'uLC'),lp:gl.getUniformLocation(this.wallProg,'uLP'),lcol:gl.getUniformLocation(this.wallProg,'uLCol'),lpar:gl.getUniformLocation(this.wallProg,'uLPar')};
+  }
+
+  _initFloorProg() {
+    const vs=`#version 300 es
+      in vec2 aPos; out vec2 vSP; void main() { gl_Position=vec4(aPos,0,1); vSP=aPos; }`;
+    const fs=`#version 300 es
+      precision highp float; precision highp sampler2DArray; precision highp sampler2D;
+      in vec2 vSP;
+      uniform sampler2DArray uTex; uniform sampler2D uWD; uniform sampler2D uWM;
+      uniform vec2 uPP; uniform float uPA; uniform float uFov; uniform float uMD; uniform int uRC; uniform float uWS;
+      uniform float uAmb; uniform int uLC; uniform vec2 uLP[16]; uniform vec3 uLCol[16]; uniform vec2 uLPar[16];
+      out vec4 fc;
+      int gFT(int t) { if(t==1) return 8; if(t==2) return 9; if(t==3) return 10; if(t==4) return 8; return 8; }
+      int gCT(int t) { return 11; }
+      void main() {
+        vec2 uv=vSP*0.5+0.5; bool isF=uv.y<0.5; float p=isF?(0.5-uv.y):(uv.y-0.5);
+        if(p<0.001) { fc=vec4(0.55,0.60,0.70,1); return; }
+        float rd=0.5/p; if(rd>uMD) { fc=vec4(0.55,0.60,0.70,1); return; }
+        float wd=texture(uWD,vec2(uv.x*float(uRC)/1024.0,0.5)).r;
+        if(rd>wd) discard;
+        float ra=uPA+(uv.x-0.5)*uFov; float wx=uPP.x+rd*cos(ra); float wy=uPP.y+rd*sin(ra);
+        vec2 muv=vec2(wx/uWS,wy/uWS);
+        if(muv.x<0.0||muv.x>1.0||muv.y<0.0||muv.y>1.0) { fc=vec4(0.55,0.60,0.70,1); return; }
+        int st=int(texture(uWM,muv).r*255.0+0.5);
+        if(st==0||st>=10) { fc=vec4(0.55,0.60,0.70,1); return; }
+        vec3 c=texture(uTex,vec3(fract(vec2(wx,wy)),float(isF?gFT(st):gCT(st)))).rgb;
+        float tl=uAmb; vec3 tint=vec3(0); vec2 wp=vec2(wx,wy);
+        for(int i=0;i<16;i++) { if(i>=uLC) break; float d=distance(wp,uLP[i]); float a=max(0.0,1.0-d/uLPar[i].x); a=a*a*uLPar[i].y; tl+=a; tint+=uLCol[i]*a; }
+        c*=min(tl,2.0); if(length(tint)>0.01) c*=normalize(vec3(1)+tint*0.5);
+        c*=max(0.6,1.0-rd*0.02); c=mix(c,vec3(0.55,0.60,0.70),clamp((rd-10.0)*0.04,0.0,1.0));
+        fc=vec4(c,1);
+      }`;
+    this.floorProg=this._program(vs,fs);
+    const gl=this.gl;
+    this.fA={pos:gl.getAttribLocation(this.floorProg,'aPos')};
+    this.fU={tex:gl.getUniformLocation(this.floorProg,'uTex'),wd:gl.getUniformLocation(this.floorProg,'uWD'),wm:gl.getUniformLocation(this.floorProg,'uWM'),pp:gl.getUniformLocation(this.floorProg,'uPP'),pa:gl.getUniformLocation(this.floorProg,'uPA'),fov:gl.getUniformLocation(this.floorProg,'uFov'),md:gl.getUniformLocation(this.floorProg,'uMD'),rc:gl.getUniformLocation(this.floorProg,'uRC'),ws:gl.getUniformLocation(this.floorProg,'uWS'),amb:gl.getUniformLocation(this.floorProg,'uAmb'),lc:gl.getUniformLocation(this.floorProg,'uLC'),lp:gl.getUniformLocation(this.floorProg,'uLP'),lcol:gl.getUniformLocation(this.floorProg,'uLCol'),lpar:gl.getUniformLocation(this.floorProg,'uLPar')};
+  }
+
+  _initSpriteProg() {
+    const vs=`#version 300 es
+      in vec2 aPos; in vec2 aUV; in float aTex; in float aLight; in vec3 aTint; in float aDist;
+      out vec2 vUV; out vec2 vScreenPos; flat out int vTex; out float vLight; out vec3 vTint; out float vDist;
+      void main() { gl_Position=vec4(aPos,0,1); vUV=aUV; vScreenPos=aPos; vTex=int(aTex); vLight=aLight; vTint=aTint; vDist=aDist; }`;
+    const fs=`#version 300 es
+      precision highp float; precision highp sampler2DArray; precision highp sampler2D;
+      in vec2 vUV; in vec2 vScreenPos; flat in int vTex; in float vLight; in vec3 vTint; in float vDist;
+      uniform sampler2DArray uSTex;
+      uniform sampler2D uWallDist;
+      uniform int uRayCount;
+      out vec4 fc;
+      void main() {
+        vec4 c=texture(uSTex,vec3(vUV,float(vTex)));
+        if(c.a<0.5) discard;
+        float screenU = (vScreenPos.x + 1.0) * 0.5;
+        float wallDist = texture(uWallDist, vec2(screenU * float(uRayCount) / 1024.0, 0.5)).r;
+        if(vDist >= wallDist) discard;
+        c.rgb*=vLight; if(length(vTint)>0.01) c.rgb*=normalize(vec3(1)+vTint*0.5);
+        fc=c;
+      }`;
+    this.spriteProg=this._program(vs,fs);
+    const gl=this.gl;
+    this.sA={pos:gl.getAttribLocation(this.spriteProg,'aPos'),uv:gl.getAttribLocation(this.spriteProg,'aUV'),tex:gl.getAttribLocation(this.spriteProg,'aTex'),light:gl.getAttribLocation(this.spriteProg,'aLight'),tint:gl.getAttribLocation(this.spriteProg,'aTint'),dist:gl.getAttribLocation(this.spriteProg,'aDist')};
+    this.sU={tex:gl.getUniformLocation(this.spriteProg,'uSTex'),wallDist:gl.getUniformLocation(this.spriteProg,'uWallDist'),rayCount:gl.getUniformLocation(this.spriteProg,'uRayCount')};
+  }
+
+  _initBuffers() {
+    const gl=this.gl;
+    this.wallVAO=gl.createVertexArray(); gl.bindVertexArray(this.wallVAO);
+    this.wallBuf=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,this.wallBuf);
+    const ws=9*4;
+    gl.enableVertexAttribArray(this.wA.pos); gl.vertexAttribPointer(this.wA.pos,2,gl.FLOAT,false,ws,0);
+    gl.enableVertexAttribArray(this.wA.uv); gl.vertexAttribPointer(this.wA.uv,2,gl.FLOAT,false,ws,8);
+    gl.enableVertexAttribArray(this.wA.tex); gl.vertexAttribPointer(this.wA.tex,1,gl.FLOAT,false,ws,16);
+    gl.enableVertexAttribArray(this.wA.fog); gl.vertexAttribPointer(this.wA.fog,1,gl.FLOAT,false,ws,20);
+    gl.enableVertexAttribArray(this.wA.side); gl.vertexAttribPointer(this.wA.side,1,gl.FLOAT,false,ws,24);
+    gl.enableVertexAttribArray(this.wA.wp); gl.vertexAttribPointer(this.wA.wp,2,gl.FLOAT,false,ws,28);
+    this.floorVAO=gl.createVertexArray(); gl.bindVertexArray(this.floorVAO);
+    this.floorBuf=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,this.floorBuf);
+    gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,-1,1,1,-1,1]),gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(this.fA.pos); gl.vertexAttribPointer(this.fA.pos,2,gl.FLOAT,false,0,0);
+    this.spriteVAO=gl.createVertexArray(); gl.bindVertexArray(this.spriteVAO);
+    this.spriteBuf=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,this.spriteBuf);
+    const ss=10*4;
+    gl.enableVertexAttribArray(this.sA.pos); gl.vertexAttribPointer(this.sA.pos,2,gl.FLOAT,false,ss,0);
+    gl.enableVertexAttribArray(this.sA.uv); gl.vertexAttribPointer(this.sA.uv,2,gl.FLOAT,false,ss,8);
+    gl.enableVertexAttribArray(this.sA.tex); gl.vertexAttribPointer(this.sA.tex,1,gl.FLOAT,false,ss,16);
+    gl.enableVertexAttribArray(this.sA.light); gl.vertexAttribPointer(this.sA.light,1,gl.FLOAT,false,ss,20);
+    gl.enableVertexAttribArray(this.sA.tint); gl.vertexAttribPointer(this.sA.tint,3,gl.FLOAT,false,ss,24);
+    gl.enableVertexAttribArray(this.sA.dist); gl.vertexAttribPointer(this.sA.dist,1,gl.FLOAT,false,ss,36);
+    gl.bindVertexArray(null);
+    this.wallData=new Float32Array(1000*6*9); this.wallDistData=new Float32Array(1024); this.spriteData=new Float32Array(300*6*10);
+  }
+
+  _initTextures() {
+    const gl=this.gl,tg=this.texGen,s=64;
+    // Outdoor themed textures: 0-7 walls, 8-10 floors, 11 sky
+    const texs=[
+      tg.gen(tg.cliff,[120,110,100],42),   // 0: cliff
+      tg.gen(tg.brick,[145,95,75],43),     // 1: brick
+      tg.gen(tg.concrete,[100,100,105],44),// 2: concrete
+      tg.gen(tg.cliff,[90,100,90],45),     // 3: mossy cliff
+      tg.gen(tg.concrete,[80,85,80],46),   // 4: dark concrete
+      tg.gen(tg.brick,[100,90,85],47),     // 5: old brick
+      tg.gen(tg.cliff,[110,105,95],48),    // 6: tan cliff
+      tg.gen(tg.concrete,[90,95,100],49),  // 7: blue concrete
+      tg.gen(tg.grass,[45,70,35],60),      // 8: grass
+      tg.gen(tg.dirt,[100,85,65],61),      // 9: dirt
+      tg.gen(tg.road,[60,60,65],62),       // 10: road
+      tg.gen(tg.sky,[135,160,200],70),     // 11: sky
+    ];
+    this.texAtlas=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D_ARRAY,this.texAtlas);
+    gl.texImage3D(gl.TEXTURE_2D_ARRAY,0,gl.RGBA,s,s,texs.length,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
+    for(let i=0;i<texs.length;i++) gl.texSubImage3D(gl.TEXTURE_2D_ARRAY,0,0,0,i,s,s,1,gl.RGBA,gl.UNSIGNED_BYTE,texs[i]);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_WRAP_S,gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_WRAP_T,gl.REPEAT);
+    gl.generateMipmap(gl.TEXTURE_2D_ARRAY);
+    this.wallDistTex=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,this.wallDistTex);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.R32F,1024,1,0,gl.RED,gl.FLOAT,null);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
+    this.wallTexMap={'CLIFF':0,'BRICK':1,'CONCRETE':2,'MOSSY':3,'BUILDING':4,'TREE':4,'ROCK':0};
+  }
+
+  _initSpriteTextures() {
+    const gl=this.gl,stg=this.spriteTexGen,s=64;
+    // Outdoor sprites: 0=pine, 1=tree, 2=building, 3=rock, 4=wreckage, 5=tower
+    const stexs=[stg.tree(42),stg.tree2(43),stg.building(44),stg.rock(45),stg.wreckage(46),stg.tower(47)];
+    this.spriteAtlas=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D_ARRAY,this.spriteAtlas);
+    gl.texImage3D(gl.TEXTURE_2D_ARRAY,0,gl.RGBA,s,s,stexs.length,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
+    for(let i=0;i<stexs.length;i++) gl.texSubImage3D(gl.TEXTURE_2D_ARRAY,0,0,0,i,s,s,1,gl.RGBA,gl.UNSIGNED_BYTE,stexs[i]);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+    gl.generateMipmap(gl.TEXTURE_2D_ARRAY);
+  }
+
+  _initWorldTex() {
+    const gl=this.gl;
+    this.worldSize = 48;
+    this.worldMapTex=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,this.worldMapTex);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.R8,this.worldSize,this.worldSize,0,gl.RED,gl.UNSIGNED_BYTE,null);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
+    this._worldMapData=new Uint8Array(this.worldSize*this.worldSize);
+    this._worldMapTM={'void':0,'grass':1,'dirt':2,'road':3,'building':4};
+  }
+
+  updateWorldMap(world) {
+    const gl=this.gl,data=this._worldMapData,tm=this._worldMapTM,ws=this.worldSize;
+    for(let y=0;y<ws;y++) for(let x=0;x<ws;x++) data[y*ws+x]=tm[world.grid[y]?.[x]]||0;
+    gl.bindTexture(gl.TEXTURE_2D,this.worldMapTex);
+    gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,ws,ws,gl.RED,gl.UNSIGNED_BYTE,data);
+  }
+
+  setRayCount(n) { this.rayCount=n; }
+  setViewDist(d) { this.maxDepth=d; }
+
+  render(world,vis,px,py,angle,lighting,spriteManager) {
+    const gl=this.gl; gl.clearColor(0.55,0.60,0.70,1); gl.clear(gl.COLOR_BUFFER_BIT);
+    const ld=lighting.getLightData();
+
+    profiler.start('walls');
+    const colW=2/this.rayCount; let wv=0; const wd=this.wallData;
+    for(let i=0;i<this.rayCount;i++) {
+      const ra=angle+((i/this.rayCount)-0.5)*this.fov;
+      const hit=this._castRay(world,vis,px,py,angle,ra);
+      this.wallDistData[i]=hit?hit.dist:this.maxDepth;
+      if(hit) {
+        const x0=-1+i*colW,x1=x0+colW;
+        const vs=[[x0,hit.top,hit.u,0],[x1,hit.top,hit.u,0],[x0,hit.bottom,hit.u,1],[x1,hit.top,hit.u,0],[x1,hit.bottom,hit.u,1],[x0,hit.bottom,hit.u,1]];
+        for(let v=0;v<6;v++) { const idx=wv*9; wd[idx]=vs[v][0]; wd[idx+1]=vs[v][1]; wd[idx+2]=vs[v][2]; wd[idx+3]=vs[v][3]; wd[idx+4]=hit.tex; wd[idx+5]=hit.fog; wd[idx+6]=hit.side; wd[idx+7]=hit.worldX; wd[idx+8]=hit.worldY; wv++; }
+      }
+    }
+    gl.bindTexture(gl.TEXTURE_2D,this.wallDistTex);
+    gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,this.rayCount,1,gl.RED,gl.FLOAT,this.wallDistData.subarray(0,this.rayCount));
+    profiler.end('walls');
+
+    profiler.start('floors');
+    this.drawCalls=0;
+    gl.useProgram(this.floorProg); gl.bindVertexArray(this.floorVAO);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D_ARRAY,this.texAtlas); gl.uniform1i(this.fU.tex,0);
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D,this.wallDistTex); gl.uniform1i(this.fU.wd,1);
+    gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D,this.worldMapTex); gl.uniform1i(this.fU.wm,2);
+    gl.uniform2f(this.fU.pp,px,py); gl.uniform1f(this.fU.pa,angle); gl.uniform1f(this.fU.fov,this.fov); gl.uniform1f(this.fU.md,this.maxDepth); gl.uniform1i(this.fU.rc,this.rayCount); gl.uniform1f(this.fU.ws,this.worldSize);
+    gl.uniform1f(this.fU.amb,lighting.ambientLevel); gl.uniform1i(this.fU.lc,ld.count);
+    gl.uniform2fv(this.fU.lp,ld.positions); gl.uniform3fv(this.fU.lcol,ld.colors); gl.uniform2fv(this.fU.lpar,ld.params);
+    gl.drawArrays(gl.TRIANGLES,0,6); this.drawCalls++;
+    profiler.end('floors');
+
+    if(wv>0) {
+      gl.useProgram(this.wallProg); gl.bindVertexArray(this.wallVAO);
+      gl.bindBuffer(gl.ARRAY_BUFFER,this.wallBuf); gl.bufferData(gl.ARRAY_BUFFER,wd.subarray(0,wv*9),gl.DYNAMIC_DRAW);
+      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D_ARRAY,this.texAtlas); gl.uniform1i(this.wU.tex,0);
+      gl.uniform1f(this.wU.amb,lighting.ambientLevel); gl.uniform1i(this.wU.lc,ld.count);
+      gl.uniform2fv(this.wU.lp,ld.positions); gl.uniform3fv(this.wU.lcol,ld.colors); gl.uniform2fv(this.wU.lpar,ld.params);
+      gl.drawArrays(gl.TRIANGLES,0,wv); this.drawCalls++;
+    }
+
+    profiler.start('sprites');
+    this._renderSprites(spriteManager,px,py,angle,lighting);
+    profiler.end('sprites');
+  }
+
+  _renderSprites(spriteManager,px,py,angle,lighting) {
+    const gl=this.gl, sprites=spriteManager.getVisible();
+    if(sprites.length===0) { this.spriteCount=0; return; }
+    const sd=this.spriteData; let sv=0;
+    const halfFov=this.fov/2, halfFovTan=Math.tan(halfFov), ar=this.width/this.height;
+
+    for(const sp of sprites) {
+      const screenX=sp.screenX/halfFovTan, dist=sp.distance;
+      const sH=(sp.scale*1.5)/dist, sW=sH/ar;
+      const left=screenX-sW/2, right=screenX+sW/2;
+      const top=sH*0.35, bottom=-sH*0.65;
+      if(right<-1||left>1) continue;
+
+      const leftU = (left + 1.0) * 0.5;
+      const rightU = (right + 1.0) * 0.5;
+      const leftCol = Math.floor(leftU * this.rayCount);
+      const rightCol = Math.floor(rightU * this.rayCount);
+      const colStart = Math.max(0, leftCol);
+      const colEnd = Math.min(this.rayCount - 1, rightCol);
+
+      let hasVisiblePortion = false;
+      for (let col = colStart; col <= colEnd; col++) {
+        if (dist < this.wallDistData[col]) { hasVisiblePortion = true; break; }
+      }
+      if (!hasVisiblePortion) continue;
+
+      const li=lighting.calcLightAt(sp.x,sp.y);
+      const verts=[[left,top,0,0],[right,top,1,0],[left,bottom,0,1],[right,top,1,0],[right,bottom,1,1],[left,bottom,0,1]];
+      for(let v=0;v<6;v++) { const idx=sv*10; sd[idx]=verts[v][0]; sd[idx+1]=verts[v][1]; sd[idx+2]=verts[v][2]; sd[idx+3]=verts[v][3]; sd[idx+4]=sp.texture; sd[idx+5]=li.intensity; sd[idx+6]=li.tint[0]; sd[idx+7]=li.tint[1]; sd[idx+8]=li.tint[2]; sd[idx+9]=dist; sv++; }
+    }
+
+    this.spriteCount=sv/6;
+    if(sv>0) {
+      gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+      gl.useProgram(this.spriteProg); gl.bindVertexArray(this.spriteVAO);
+      gl.bindBuffer(gl.ARRAY_BUFFER,this.spriteBuf); gl.bufferData(gl.ARRAY_BUFFER,sd.subarray(0,sv*10),gl.DYNAMIC_DRAW);
+      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D_ARRAY,this.spriteAtlas); gl.uniform1i(this.sU.tex,0);
+      gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D,this.wallDistTex); gl.uniform1i(this.sU.wallDist,1);
+      gl.uniform1i(this.sU.rayCount,this.rayCount);
+      gl.drawArrays(gl.TRIANGLES,0,sv); this.drawCalls++;
+      gl.disable(gl.BLEND);
+    }
+  }
+
+  _castRay(world,vis,px,py,va,ra) {
+    const step=0.02,cosA=Math.cos(ra),sinA=Math.sin(ra),cosCorr=Math.cos(ra-va);
+    let x=px,y=py,dist=0;
+    while(dist<this.maxDepth) {
+      x+=cosA*step; y+=sinA*step; dist+=step;
+      const gx=Math.floor(x),gy=Math.floor(y),sec=world.getSector(x,y);
+      if(!sec.walkable) {
+        if(!vis.isVisible(gx,gy)&&!vis.isDiscovered(gx,gy)) return null;
+        const cd=dist*cosCorr,wh=Math.min(2,1.7/cd);
+        const hx=x-gx,hy=y-gy,isNS=hx<0.03||hx>0.97;
+        return {dist:cd,top:wh/2,bottom:-wh/2,u:isNS?hy:hx,tex:this.wallTexMap[sec.name]||0,fog:Math.max(0,Math.min(1,(cd-8)*0.05)),side:isNS?1:0,worldX:x,worldY:y};
+      }
+    }
+    return null;
+  }
+}
+
+// ─── WORLD ───
+class World {
+  constructor(cfg={}) { this.width=cfg.width||48; this.height=cfg.height||48; this.grid=Array(this.height).fill(null).map(()=>Array(this.width).fill('void')); this.sectorTypes=new Map(); this.sectorTypes.set('void',{walkable:false,floorColor:[30,30,35],name:'VOID'}); }
+  registerSectorTypes(types) { for(const[k,v] of Object.entries(types)) this.sectorTypes.set(k,{...v}); }
+  getSector(x,y) { const gx=Math.floor(x),gy=Math.floor(y); if(gx<0||gx>=this.width||gy<0||gy>=this.height) return this.sectorTypes.get('void'); return this.sectorTypes.get(this.grid[gy][gx])||this.sectorTypes.get('void'); }
+  fillRect(x1,y1,x2,y2,type) { for(let y=Math.min(y1,y2);y<=Math.max(y1,y2);y++) for(let x=Math.min(x1,x2);x<=Math.max(x1,x2);x++) if(x>=0&&x<this.width&&y>=0&&y<this.height) this.grid[y][x]=type; }
+  setCell(x,y,type) { if(x>=0&&x<this.width&&y>=0&&y<this.height) this.grid[y][x]=type; }
+}
+
+// ─── VISIBILITY ───
+class Visibility {
+  constructor(world,cfg={}) { this.world=world; this.viewDistance=cfg.viewDistance||20; this.discovered=new Set(); this.currentlyVisible=new Set(); }
+  update(x,y) {
+    this.currentlyVisible.clear();
+    for(let i=0;i<180;i++) {
+      const angle=(i/180)*Math.PI*2;
+      let rx=x,ry=y;
+      const dx=Math.cos(angle)*0.5,dy=Math.sin(angle)*0.5;
+      for(let d=0;d<this.viewDistance;d+=0.5) {
+        rx+=dx; ry+=dy;
+        const k=`${Math.floor(rx)},${Math.floor(ry)}`;
+        this.currentlyVisible.add(k);
+        const s=this.world.getSector(rx,ry);
+        if(s.walkable) this.discovered.add(k);
+        if(!s.walkable) break;
+      }
+    }
+  }
+  isVisible(gx,gy) { return this.currentlyVisible.has(`${gx},${gy}`); }
+  isDiscovered(gx,gy) { return this.discovered.has(`${gx},${gy}`); }
+}
+
+// ─── MECH MOVEMENT (with momentum) ───
+class MechMovement {
+  constructor(world) {
+    this.world=world;
+  }
+  move(mech,dt) {
+    // Apply velocity
+    const newX = mech.x + mech.velocity.x * dt;
+    const newY = mech.y + mech.velocity.y * dt;
+    const r = mech.radius || 0.3;
+
+    // Check collision
+    if(this._canMove(newX, newY, r)) {
+      mech.x = newX;
+      mech.y = newY;
+    } else if(this._canMove(newX, mech.y, r)) {
+      mech.x = newX;
+      mech.velocity.y *= 0.5; // Wall slide
+    } else if(this._canMove(mech.x, newY, r)) {
+      mech.y = newY;
+      mech.velocity.x *= 0.5;
+    } else {
+      mech.velocity.x *= 0.3;
+      mech.velocity.y *= 0.3;
+    }
+  }
+  _canMove(x,y,r) {
+    for(const[px,py] of [[x,y],[x-r,y-r],[x+r,y-r],[x-r,y+r],[x+r,y+r]])
+      if(!this.world.getSector(px,py).walkable) return false;
+    return true;
+  }
+}
+
+// ─── INPUT ───
+class Input {
+  constructor() { this.keys={}; this.mouseDX=0; this.locked=false; }
+  init(target) {
+    window.addEventListener('keydown',e=>{ this.keys[e.code]=true; if(['KeyW','KeyA','KeyS','KeyD','KeyF'].includes(e.code)) e.preventDefault(); });
+    window.addEventListener('keyup',e=>this.keys[e.code]=false);
+    document.addEventListener('mousemove',e=>{ if(this.locked) this.mouseDX+=e.movementX; });
+    document.addEventListener('pointerlockchange',()=>{ this.locked=document.pointerLockElement===target; document.getElementById('click-prompt').classList.toggle('hidden',this.locked); });
+    target.addEventListener('click',()=>{ if(!this.locked) target.requestPointerLock(); });
+  }
+  consumeMouseDX() { const dx = this.mouseDX; this.mouseDX = 0; return dx; }
+}
+
+// ─── MINIMAP ───
+class Minimap {
+  constructor(cfg={}) { this.fov=cfg.fov||Math.PI*0.55; }
+  init(canvas) { this.canvas=canvas; this.ctx=canvas.getContext('2d'); this.resize(); window.addEventListener('resize',()=>this.resize()); }
+  resize() { const c=this.canvas.parentElement; const sz=Math.min(c.clientWidth-16,c.clientHeight-24); this.canvas.width=sz; this.canvas.height=sz; }
+  render(world,vis,px,py,legAngle,torsoAngle,sprites) {
+    const ctx=this.ctx,w=this.canvas.width,h=this.canvas.height,cw=w/world.width,ch=h/world.height;
+    ctx.fillStyle='#030305'; ctx.fillRect(0,0,w,h);
+    for(let gy=0;gy<world.height;gy++) for(let gx=0;gx<world.width;gx++) {
+      const sec=world.getSector(gx,gy),v=vis.isVisible(gx,gy),d=vis.isDiscovered(gx,gy);
+      let col; if(!d&&!v) col='#050508'; else if(!sec.walkable) col=v?'#3a3a45':'#1a1a22'; else if(v) { const c=sec.floorColor; col=`rgb(${c[0]*0.6|0},${c[1]*0.6|0},${c[2]*0.6|0})`; } else col='#121215';
+      ctx.fillStyle=col; ctx.fillRect(gx*cw,gy*ch,cw+0.5,ch+0.5);
+    }
+    // Sprites
+    ctx.fillStyle='#336633';
+    for(const sp of sprites) { ctx.beginPath(); ctx.arc(sp.x*cw,sp.y*ch,2,0,Math.PI*2); ctx.fill(); }
+    // Player mech
+    const mx=px*cw,my=py*ch;
+    // Legs direction
+    ctx.strokeStyle='#666'; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(mx,my); ctx.lineTo(mx+Math.cos(legAngle)*10,my+Math.sin(legAngle)*10); ctx.stroke();
+    // Torso direction
+    ctx.strokeStyle='#33ff33'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(mx,my); ctx.lineTo(mx+Math.cos(torsoAngle)*12,my+Math.sin(torsoAngle)*12); ctx.stroke();
+    // Center
+    ctx.fillStyle='#33ff33'; ctx.shadowColor='#33ff33'; ctx.shadowBlur=5;
+    ctx.beginPath(); ctx.arc(mx,my,4,0,Math.PI*2); ctx.fill(); ctx.shadowBlur=0;
+  }
+}
+
+// ─── OVERLAY ───
+class Overlay {
+  init(canvas) { this.canvas=canvas; this.ctx=canvas.getContext('2d'); this.resize(); window.addEventListener('resize',()=>this.resize()); }
+  resize() { const c=this.canvas.parentElement; this.width=c.clientWidth; this.height=c.clientHeight; this.canvas.width=this.width; this.canvas.height=this.height; }
+  render(torsoOffset) {
+    const ctx=this.ctx,w=this.width,h=this.height;
+    ctx.clearRect(0,0,w,h);
+    // Vignette
+    const vig=ctx.createRadialGradient(w/2,h/2,h*0.2,w/2,h/2,h*0.9);
+    vig.addColorStop(0,'rgba(0,0,0,0)'); vig.addColorStop(1,'rgba(0,0,0,0.5)');
+    ctx.fillStyle=vig; ctx.fillRect(0,0,w,h);
+    // Crosshair
+    ctx.strokeStyle='rgba(51,255,51,0.8)'; ctx.lineWidth=2;
+    ctx.beginPath();
+    ctx.moveTo(w/2-20,h/2); ctx.lineTo(w/2-8,h/2);
+    ctx.moveTo(w/2+8,h/2); ctx.lineTo(w/2+20,h/2);
+    ctx.moveTo(w/2,h/2-20); ctx.lineTo(w/2,h/2-8);
+    ctx.moveTo(w/2,h/2+8); ctx.lineTo(w/2,h/2+20);
+    ctx.stroke();
+    // Center dot
+    ctx.fillStyle='#33ff33';
+    ctx.beginPath(); ctx.arc(w/2,h/2,2,0,Math.PI*2); ctx.fill();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// WORLD GENERATION
+// ═══════════════════════════════════════════════════════════════════════════
+
+const SECTOR_TYPES = {
+  grass: { walkable: true, floorColor: [50, 75, 40], name: 'GRASSLAND' },
+  dirt: { walkable: true, floorColor: [95, 80, 60], name: 'DIRT PATH' },
+  road: { walkable: true, floorColor: [65, 65, 70], name: 'ROAD' },
+  building: { walkable: false, floorColor: [80, 80, 85], name: 'BUILDING' },
+  tree: { walkable: false, floorColor: [40, 60, 35], name: 'TREE' },
+  rock: { walkable: false, floorColor: [100, 95, 85], name: 'CLIFF' },
+};
+
+function generateOverworld(world, spriteManager) {
+  // Fill with grass
+  world.fillRect(1, 1, world.width-2, world.height-2, 'grass');
+
+  // Add some dirt patches
+  for(let i = 0; i < 8; i++) {
+    const cx = 5 + Math.floor(Math.random() * (world.width - 10));
+    const cy = 5 + Math.floor(Math.random() * (world.height - 10));
+    const r = 2 + Math.floor(Math.random() * 3);
+    world.fillRect(cx-r, cy-r, cx+r, cy+r, 'dirt');
+  }
+
+  // Main road (horizontal)
+  world.fillRect(1, 22, world.width-2, 25, 'road');
+  // Cross road (vertical)
+  world.fillRect(22, 1, 25, world.height-2, 'road');
+
+  // Buildings cluster (town)
+  const townX = 30, townY = 30;
+  for(let i = 0; i < 5; i++) {
+    const bx = townX + (i % 3) * 5;
+    const by = townY + Math.floor(i / 3) * 5;
+    world.fillRect(bx, by, bx+2, by+2, 'building');
+    // Building sprite
+    spriteManager.add({ x: bx + 1.5, y: by + 1.5, texture: 2, scale: 2.5 });
+  }
+
+  // Forest area (northwest)
+  for(let i = 0; i < 40; i++) {
+    const tx = 3 + Math.floor(Math.random() * 15);
+    const ty = 3 + Math.floor(Math.random() * 15);
+    if(world.getSector(tx, ty).walkable && world.getSector(tx, ty).name !== 'ROAD') {
+      // Don't place wall, just sprite
+      spriteManager.add({ x: tx + 0.5, y: ty + 0.5, texture: Math.random() > 0.5 ? 0 : 1, scale: 1.5 + Math.random() * 0.5 });
+    }
+  }
+
+  // Scattered trees
+  for(let i = 0; i < 30; i++) {
+    const tx = 2 + Math.floor(Math.random() * (world.width - 4));
+    const ty = 2 + Math.floor(Math.random() * (world.height - 4));
+    if(world.getSector(tx, ty).walkable && world.getSector(tx, ty).name === 'GRASSLAND') {
+      spriteManager.add({ x: tx + 0.5, y: ty + 0.5, texture: Math.random() > 0.5 ? 0 : 1, scale: 1.2 + Math.random() * 0.6 });
+    }
+  }
+
+  // Rock formations
+  for(let i = 0; i < 8; i++) {
+    const rx = 5 + Math.floor(Math.random() * (world.width - 10));
+    const ry = 5 + Math.floor(Math.random() * (world.height - 10));
+    if(world.getSector(rx, ry).name === 'GRASSLAND') {
+      world.setCell(rx, ry, 'rock');
+      spriteManager.add({ x: rx + 0.5, y: ry + 0.5, texture: 3, scale: 1.0 + Math.random() * 0.5 });
+    }
+  }
+
+  // Mech wreckage
+  spriteManager.add({ x: 15.5, y: 35.5, texture: 4, scale: 2.0 });
+  spriteManager.add({ x: 40.5, y: 10.5, texture: 4, scale: 1.8 });
+
+  // Radio towers
+  spriteManager.add({ x: 8.5, y: 8.5, texture: 5, scale: 2.5 });
+  spriteManager.add({ x: 42.5, y: 42.5, texture: 5, scale: 2.2 });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MECH STATE
+// ═══════════════════════════════════════════════════════════════════════════
+
+const mech = {
+  x: 24,
+  y: 24,
+  legAngle: 0,
+  torsoAngle: 0,
+  velocity: { x: 0, y: 0 },
+  throttle: 0,
+  maxSpeed: 86,       // KPH
+  acceleration: 25,   // KPH/s
+  turnRate: 1.0,      // rad/s for legs
+  torsoTurnRate: 2.5, // rad/s for torso
+  torsoTwistLimit: Math.PI / 2.5,
+  heat: 0,
+  maxHeat: 30,
+  heatDissipation: 2,
+  radius: 0.4,
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SETUP
+// ═══════════════════════════════════════════════════════════════════════════
+
+const world = new World({ width: 48, height: 48 });
+world.registerSectorTypes(SECTOR_TYPES);
+
+const spriteManager = new SpriteManager();
+generateOverworld(world, spriteManager);
+
+const visibility = new Visibility(world, { viewDistance: 22 });
+const mechMovement = new MechMovement(world);
+const input = new Input();
+const renderer = new Renderer({ rayCount: 500, maxDepth: 22 });
+const overlay = new Overlay();
+const minimap = new Minimap();
+const lighting = new LightingSystem();
+
+// Outdoor ambient (bright daylight)
+lighting.setAmbient(0.35);
+
+// Sun-like directional approximation (bright areas)
+lighting.addLight({ x: 24, y: 24, radius: 30, intensity: 0.3, color: [1, 0.98, 0.9], flicker: 0 });
+
+// Flashlight
+const flashlight = lighting.addLight({ x: mech.x, y: mech.y, radius: 10, intensity: 0, color: [1, 1, 0.95], type: 'player' });
+let flashlightOn = false;
+
+renderer.init(document.getElementById('game-canvas'));
+renderer.updateWorldMap(world);
+overlay.init(document.getElementById('overlay-canvas'));
+minimap.init(document.getElementById('minimap-canvas'));
+input.init(document.getElementById('viewport'));
+visibility.update(mech.x, mech.y);
+
+// UI controls
+document.getElementById('tune-rays').addEventListener('input', e => {
+  renderer.setRayCount(parseInt(e.target.value));
+  document.getElementById('tune-rays-val').textContent = e.target.value;
+});
+document.getElementById('tune-viewdist').addEventListener('input', e => {
+  renderer.setViewDist(parseInt(e.target.value));
+  visibility.viewDistance = parseInt(e.target.value);
+  document.getElementById('tune-viewdist-val').textContent = e.target.value;
+});
+
+function showMessage(t) {
+  const log = document.getElementById('messages');
+  const msg = document.createElement('div');
+  msg.className = 'message';
+  msg.textContent = t;
+  log.appendChild(msg);
+  setTimeout(() => msg.remove(), 3500);
+}
+
+let lastFKey = false;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GAME LOOP
+// ═══════════════════════════════════════════════════════════════════════════
+
+let lastTime = 0, uiTimer = 0;
+
+function gameLoop(time) {
+  profiler.start('frame');
+  const dt = Math.min((time - lastTime) / 1000, 0.1);
+  lastTime = time;
+
+  // ─── INPUT PROCESSING ───
+
+  // Throttle control (W/S)
+  if (input.keys['KeyW']) {
+    mech.throttle = Math.min(1, mech.throttle + dt * 0.8);
+  } else if (input.keys['KeyS']) {
+    mech.throttle = Math.max(-0.3, mech.throttle - dt * 0.8);
+  } else {
+    // Throttle decay
+    mech.throttle *= 0.95;
+    if (Math.abs(mech.throttle) < 0.01) mech.throttle = 0;
+  }
+
+  // Leg turning (A/D)
+  if (input.keys['KeyA']) mech.legAngle -= mech.turnRate * dt;
+  if (input.keys['KeyD']) mech.legAngle += mech.turnRate * dt;
+
+  // Normalize angles
+  while (mech.legAngle < 0) mech.legAngle += Math.PI * 2;
+  while (mech.legAngle >= Math.PI * 2) mech.legAngle -= Math.PI * 2;
+
+  // Torso follows mouse
+  const mouseDX = input.consumeMouseDX();
+  mech.torsoAngle += mouseDX * 0.003;
+
+  // Constrain torso to twist limits relative to legs
+  let torsoOffset = mech.torsoAngle - mech.legAngle;
+  while (torsoOffset > Math.PI) torsoOffset -= Math.PI * 2;
+  while (torsoOffset < -Math.PI) torsoOffset += Math.PI * 2;
+
+  if (torsoOffset > mech.torsoTwistLimit) {
+    mech.torsoAngle = mech.legAngle + mech.torsoTwistLimit;
+  } else if (torsoOffset < -mech.torsoTwistLimit) {
+    mech.torsoAngle = mech.legAngle - mech.torsoTwistLimit;
+  }
+
+  // Flashlight toggle
+  if (input.keys['KeyF'] && !lastFKey) {
+    flashlightOn = !flashlightOn;
+    flashlight.intensity = flashlightOn ? 1.2 : 0;
+    showMessage(flashlightOn ? '🔦 Flashlight ON' : '🔦 Flashlight OFF');
+  }
+  lastFKey = input.keys['KeyF'];
+
+  // ─── MECH PHYSICS ───
+
+  // Calculate target speed
+  const targetSpeed = mech.throttle * mech.maxSpeed / 3.6; // Convert KPH to m/s (sort of)
+
+  // Accelerate/decelerate towards target (LEGS direction, not torso!)
+  const currentSpeed = Math.sqrt(mech.velocity.x ** 2 + mech.velocity.y ** 2);
+  const speedDiff = targetSpeed - currentSpeed;
+  const accel = Math.sign(speedDiff) * Math.min(Math.abs(speedDiff), mech.acceleration * dt);
+
+  const targetVelX = Math.cos(mech.legAngle) * (currentSpeed + accel);
+  const targetVelY = Math.sin(mech.legAngle) * (currentSpeed + accel);
+
+  // Smooth velocity transition (momentum)
+  mech.velocity.x += (targetVelX - mech.velocity.x) * 0.1;
+  mech.velocity.y += (targetVelY - mech.velocity.y) * 0.1;
+
+  // Apply movement
+  mechMovement.move(mech, dt);
+
+  // Heat dissipation
+  mech.heat = Math.max(0, mech.heat - mech.heatDissipation * dt);
+
+  // ─── UPDATE SYSTEMS ───
+
+  visibility.update(mech.x, mech.y);
+  lighting.update(dt, mech.x, mech.y, mech.torsoAngle);
+  spriteManager.update(mech.x, mech.y, mech.torsoAngle, renderer.fov, renderer.maxDepth);
+
+  // ─── RENDER ───
+
+  // Render from TORSO angle (where player is looking)
+  renderer.render(world, visibility, mech.x, mech.y, mech.torsoAngle, lighting, spriteManager);
+  overlay.render(torsoOffset);
+  minimap.render(world, visibility, mech.x, mech.y, mech.legAngle, mech.torsoAngle, spriteManager.sprites);
+
+  profiler.end('frame');
+
+  // ─── UI UPDATES ───
+
+  uiTimer += dt;
+  if (uiTimer > 0.1) {
+    uiTimer = 0;
+    const frame = profiler.getAvg('frame');
+    const fps = frame > 0 ? 1000 / frame : 0;
+    const speed = Math.sqrt(mech.velocity.x ** 2 + mech.velocity.y ** 2) * 3.6;
+    const heatPct = (mech.heat / mech.maxHeat) * 100;
+
+    document.getElementById('stat-fps').textContent = fps.toFixed(0);
+    document.getElementById('stat-fps').className = 'stat-value' + (fps >= 55 ? '' : fps >= 30 ? ' warn' : ' danger');
+    document.getElementById('stat-frame').textContent = frame.toFixed(1) + 'ms';
+    document.getElementById('stat-heat').textContent = heatPct.toFixed(0) + '%';
+    document.getElementById('stat-heat').className = 'stat-value' + (heatPct < 70 ? '' : heatPct < 90 ? ' warn' : ' danger');
+    document.getElementById('stat-speed').textContent = speed.toFixed(0) + ' KPH';
+    document.getElementById('stat-sector').textContent = world.getSector(mech.x, mech.y).name || '--';
+
+    document.getElementById('perf-frame').textContent = frame.toFixed(2) + 'ms';
+    document.getElementById('perf-walls').textContent = profiler.getAvg('walls').toFixed(2) + 'ms';
+    document.getElementById('perf-floors').textContent = profiler.getAvg('floors').toFixed(2) + 'ms';
+    document.getElementById('perf-sprites').textContent = profiler.getAvg('sprites').toFixed(2) + 'ms';
+
+    // HUD elements
+    document.getElementById('heat-fill').style.height = heatPct + '%';
+    document.getElementById('speed-display').textContent = speed.toFixed(0) + ' KPH';
+    document.getElementById('throttle-fill').style.width = ((mech.throttle + 0.3) / 1.3 * 100) + '%';
+  }
+
+  requestAnimationFrame(gameLoop);
+}
+
+// ─── START ───
+console.log('═══════════════════════════════════════════════════');
+console.log('  GIGAMECH - OVERWORLD ALPHA');
+console.log('  World size: 48x48');
+console.log('  Sprites:', spriteManager.sprites.length);
+console.log('═══════════════════════════════════════════════════');
+showMessage('🤖 REACTOR ONLINE');
+showMessage('🎮 WASD: Move | Mouse: Aim Torso | F: Light');
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>
