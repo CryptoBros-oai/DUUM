@@ -272,7 +272,7 @@
       <div id="start-screen">
         <h1>GIGAMECH</h1>
         <div class="subtitle">HEAVY METAL COMBAT</div>
-        <div class="start-prompt" onclick="startGame()">[ ENGAGE ]</div>
+        <div class="start-prompt" id="engage-btn">[ ENGAGE ]</div>
         <div class="boot-sequence">
           <div class="boot-line">&gt; REACTOR ONLINE</div>
           <div class="boot-line">&gt; SENSORS ONLINE</div>
@@ -476,17 +476,21 @@
       console.log('  - data/missions.js');
       console.log('');
       console.log('Click viewport to start');
-    });
 
-    // Keyboard shortcuts
-    document.addEventListener('keydown', (e) => {
-      if (e.code === 'Escape') {
-        document.exitPointerLock();
-      }
-    });
+      // Attach event listeners after DOM is ready
+      document.getElementById('start-screen').addEventListener('click', startGame);
+      document.getElementById('engage-btn').addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent double-firing
+        startGame();
+      });
 
-    // Click to start
-    document.getElementById('start-screen').addEventListener('click', startGame);
+      // Keyboard shortcuts
+      document.addEventListener('keydown', (e) => {
+        if (e.code === 'Escape') {
+          document.exitPointerLock();
+        }
+      });
+    });
   </script>
 </body>
 </html>
