@@ -18,7 +18,7 @@
     #main { flex: 1; display: flex; padding: 8px; min-height: 0; gap: 8px; }
     #viewport { flex: 2; position: relative; border: 2px solid #1a1a1a; border-radius: 4px; overflow: hidden; background: #000; }
     #game-canvas { width: 100%; height: 100%; display: block; }
-    #overlay-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+    #cockpit-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
     #click-prompt { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.9); border: 1px solid #33ff33; padding: 14px 28px; text-align: center; cursor: pointer; z-index: 10; }
     #click-prompt:hover { background: rgba(51,255,51,0.1); }
     #click-prompt.hidden { display: none; }
@@ -35,18 +35,10 @@
     .slider-value { color: #33ff33; min-width: 35px; text-align: right; }
     .control-row { display: flex; justify-content: space-between; font-size: 0.6rem; color: #888; margin-bottom: 3px; }
     .key { background: #1a1a1f; border: 1px solid #2a2a2a; padding: 1px 4px; border-radius: 2px; color: #33ff33; font-size: 0.55rem; }
-    #messages { position: absolute; bottom: 10px; left: 10px; max-width: 300px; z-index: 5; }
+    #messages { position: absolute; top: 10px; left: 10px; max-width: 300px; z-index: 5; }
     .message { background: rgba(0,0,0,0.85); border-left: 2px solid #33ff33; padding: 4px 8px; margin-bottom: 2px; font-size: 0.7rem; animation: msgIn 0.2s ease-out, msgOut 0.3s ease-in 3s forwards; }
     @keyframes msgIn { from { opacity: 0; transform: translateX(-10px); } }
     @keyframes msgOut { to { opacity: 0; } }
-    /* Mech-specific HUD elements */
-    #torso-indicator { position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%); font-size: 0.6rem; color: #33ff33; opacity: 0.7; }
-    #heat-bar { position: absolute; right: 20px; top: 50%; transform: translateY(-50%); width: 20px; height: 150px; border: 1px solid #33ff33; background: rgba(0,0,0,0.5); }
-    #heat-fill { position: absolute; bottom: 0; width: 100%; background: linear-gradient(to top, #33ff33, #ffaa33, #ff3333); transition: height 0.1s; }
-    #heat-label { position: absolute; right: 45px; top: 50%; transform: translateY(-50%) rotate(-90deg); font-size: 0.6rem; color: #555; letter-spacing: 2px; }
-    #speed-display { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); font-family: 'Orbitron', sans-serif; font-size: 1.5rem; color: #33ff33; text-shadow: 0 0 10px #33ff33; }
-    #throttle-bar { position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%); width: 200px; height: 8px; border: 1px solid #33ff33; background: rgba(0,0,0,0.5); }
-    #throttle-fill { height: 100%; background: #33ff33; transition: width 0.1s; }
   </style>
 </head>
 <body>
@@ -63,15 +55,9 @@
   <div id="main">
     <div id="viewport">
       <canvas id="game-canvas"></canvas>
-      <canvas id="overlay-canvas"></canvas>
+      <canvas id="cockpit-canvas"></canvas>
       <div id="click-prompt"><h2>[ ENGAGE REACTOR ]</h2></div>
       <div id="messages"></div>
-      <!-- Mech HUD elements -->
-      <div id="heat-label">HEAT</div>
-      <div id="heat-bar"><div id="heat-fill" style="height: 0%"></div></div>
-      <div id="speed-display">0 KPH</div>
-      <div id="throttle-bar"><div id="throttle-fill" style="width: 50%"></div></div>
-      <div id="torso-indicator">◄ TORSO ►</div>
     </div>
     <div id="sidebar">
       <div class="panel" id="minimap-panel"><div class="panel-title">TACTICAL MAP</div><canvas id="minimap-canvas"></canvas></div>
@@ -162,10 +148,8 @@ class SpriteTexGen {
     const s=this.s, d=new Uint8Array(s*s*4), cx=s/2;
     for(let y=0;y<s;y++) for(let x=0;x<s;x++) {
       const i=(y*s+x)*4;
-      // Trunk
       const trunkW = s*0.08;
       const inTrunk = Math.abs(x-cx) < trunkW && y > s*0.6;
-      // Foliage (triangle shape)
       const treeTop = s*0.1;
       const treeBot = s*0.7;
       const progress = (y - treeTop) / (treeBot - treeTop);
@@ -186,14 +170,12 @@ class SpriteTexGen {
     return d;
   }
 
-  // Deciduous tree (rounder)
+  // Deciduous tree
   tree2(seed=0) {
     const s=this.s, d=new Uint8Array(s*s*4), cx=s/2, cy=s*0.35;
     for(let y=0;y<s;y++) for(let x=0;x<s;x++) {
       const i=(y*s+x)*4;
-      // Trunk
       const inTrunk = Math.abs(x-cx) < s*0.06 && y > s*0.5;
-      // Foliage (circle)
       const dx = x-cx, dy = y-cy;
       const dist = Math.sqrt(dx*dx + dy*dy);
       const inFoliage = dist < s*0.35 && y < s*0.65;
@@ -212,7 +194,7 @@ class SpriteTexGen {
     return d;
   }
 
-  // Building/structure
+  // Building
   building(seed=0) {
     const s=this.s, d=new Uint8Array(s*s*4), cx=s/2;
     const bw = s*0.4, bh = s*0.8;
@@ -222,7 +204,6 @@ class SpriteTexGen {
       if (!inBuilding) { d[i]=d[i+1]=d[i+2]=d[i+3]=0; continue; }
 
       const n = this._n(x,y,seed) * 15;
-      // Windows
       const wx = ((x-cx+bw) % 12) < 6;
       const wy = (y % 14) < 8 && y < s-10;
       const isWindow = wx && wy && y > s*0.3;
@@ -241,7 +222,7 @@ class SpriteTexGen {
     return d;
   }
 
-  // Rock/boulder
+  // Rock
   rock(seed=0) {
     const s=this.s, d=new Uint8Array(s*s*4), cx=s/2, cy=s*0.55;
     for(let y=0;y<s;y++) for(let x=0;x<s;x++) {
@@ -257,12 +238,11 @@ class SpriteTexGen {
     return d;
   }
 
-  // Destroyed mech (wreckage)
+  // Wreckage
   wreckage(seed=0) {
     const s=this.s, d=new Uint8Array(s*s*4), cx=s/2;
     for(let y=0;y<s;y++) for(let x=0;x<s;x++) {
       const i=(y*s+x)*4;
-      // Tilted mech torso shape
       const tilt = (y/s) * 10;
       const inBody = Math.abs(x-cx-tilt) < s*0.25 && y > s*0.3;
 
@@ -280,18 +260,15 @@ class SpriteTexGen {
     return d;
   }
 
-  // Radio tower
+  // Tower
   tower(seed=0) {
     const s=this.s, d=new Uint8Array(s*s*4), cx=s/2;
     for(let y=0;y<s;y++) for(let x=0;x<s;x++) {
       const i=(y*s+x)*4;
-      // Main pole
       const inPole = Math.abs(x-cx) < s*0.03;
-      // Cross beams
       const beamY = y % 16 < 3;
       const beamWidth = (1 - y/s) * s * 0.3;
       const inBeam = beamY && Math.abs(x-cx) < beamWidth && y < s*0.9;
-      // Dish at top
       const inDish = y < s*0.15 && Math.abs(x-cx) < s*0.15;
 
       if (inPole || inBeam || inDish) {
@@ -342,16 +319,13 @@ class TexGen {
   _n(x,y,seed=0) { const n=Math.sin(x*12.9898+y*78.233+seed)*43758.5453; return n-Math.floor(n); }
   _fbm(x,y,oct=4,seed=0) { let v=0,a=0.5,f=1; for(let i=0;i<oct;i++) { v+=a*this._n(x*f,y*f,seed+i*100); a*=0.5; f*=2; } return v; }
   gen(fn,...args) { const s=this.s,d=new Uint8Array(s*s*4); for(let y=0;y<s;y++) for(let x=0;x<s;x++) { const[r,g,b]=fn.call(this,x,y,s,...args); const i=(y*s+x)*4; d[i]=r; d[i+1]=g; d[i+2]=b; d[i+3]=255; } return d; }
-  // Outdoor wall textures
   cliff(x,y,s,base,seed) { const n=this._fbm(x/4,y/8,4,seed)*60; return [Math.max(0,Math.min(255,base[0]+n)),Math.max(0,Math.min(255,base[1]+n-5)),Math.max(0,Math.min(255,base[2]+n-10))]; }
   brick(x,y,s,base,seed) { const row=Math.floor(y/8),ox=(row%2)*8,bx=(x+ox)%16,by=y%8; if(bx<2||by<2) return [55,52,48]; const bv=(this._n(Math.floor((x+ox)/16)+row*1000,0,seed)-0.5)*60; return [Math.max(0,Math.min(255,base[0]+bv)),Math.max(0,Math.min(255,base[1]+bv*0.8)),Math.max(0,Math.min(255,base[2]+bv*0.6))]; }
   concrete(x,y,s,base,seed) { const t=this._fbm(x/4,y/4,4,seed)*50-25; return [Math.max(0,Math.min(255,base[0]+t)),Math.max(0,Math.min(255,base[1]+t)),Math.max(0,Math.min(255,base[2]+t))]; }
-  // Floor textures
   grass(x,y,s,base,seed) { const n=this._fbm(x/3,y/3,4,seed)*40-20; const blade=this._n(x*10,y*10,seed)>0.85?20:0; return [Math.max(0,Math.min(255,base[0]+n)),Math.max(0,Math.min(255,base[1]+n+blade)),Math.max(0,Math.min(255,base[2]+n))]; }
   dirt(x,y,s,base,seed) { const n=this._fbm(x/4,y/4,4,seed)*50-25; return [Math.max(0,Math.min(255,base[0]+n)),Math.max(0,Math.min(255,base[1]+n*0.9)),Math.max(0,Math.min(255,base[2]+n*0.7))]; }
   sand(x,y,s,base,seed) { const n=this._fbm(x/5,y/5,3,seed)*30-15; return [Math.max(0,Math.min(255,base[0]+n)),Math.max(0,Math.min(255,base[1]+n)),Math.max(0,Math.min(255,base[2]+n*0.8))]; }
   road(x,y,s,base,seed) { const stripe=(Math.abs(x-s/2)<3&&(y%20)<12)?1:0; if(stripe) return [200,180,50]; const n=this._n(x,y,seed)*15; return [Math.max(0,Math.min(255,base[0]+n)),Math.max(0,Math.min(255,base[1]+n)),Math.max(0,Math.min(255,base[2]+n))]; }
-  // Ceiling/sky
   sky(x,y,s,base,seed) { if(this._n(x*5,y*5,seed)>0.97) return [220,220,240]; return [base[0],base[1],base[2]]; }
 }
 
@@ -488,20 +462,19 @@ class Renderer {
 
   _initTextures() {
     const gl=this.gl,tg=this.texGen,s=64;
-    // Outdoor themed textures: 0-7 walls, 8-10 floors, 11 sky
     const texs=[
-      tg.gen(tg.cliff,[120,110,100],42),   // 0: cliff
-      tg.gen(tg.brick,[145,95,75],43),     // 1: brick
-      tg.gen(tg.concrete,[100,100,105],44),// 2: concrete
-      tg.gen(tg.cliff,[90,100,90],45),     // 3: mossy cliff
-      tg.gen(tg.concrete,[80,85,80],46),   // 4: dark concrete
-      tg.gen(tg.brick,[100,90,85],47),     // 5: old brick
-      tg.gen(tg.cliff,[110,105,95],48),    // 6: tan cliff
-      tg.gen(tg.concrete,[90,95,100],49),  // 7: blue concrete
-      tg.gen(tg.grass,[45,70,35],60),      // 8: grass
-      tg.gen(tg.dirt,[100,85,65],61),      // 9: dirt
-      tg.gen(tg.road,[60,60,65],62),       // 10: road
-      tg.gen(tg.sky,[135,160,200],70),     // 11: sky
+      tg.gen(tg.cliff,[120,110,100],42),
+      tg.gen(tg.brick,[145,95,75],43),
+      tg.gen(tg.concrete,[100,100,105],44),
+      tg.gen(tg.cliff,[90,100,90],45),
+      tg.gen(tg.concrete,[80,85,80],46),
+      tg.gen(tg.brick,[100,90,85],47),
+      tg.gen(tg.cliff,[110,105,95],48),
+      tg.gen(tg.concrete,[90,95,100],49),
+      tg.gen(tg.grass,[45,70,35],60),
+      tg.gen(tg.dirt,[100,85,65],61),
+      tg.gen(tg.road,[60,60,65],62),
+      tg.gen(tg.sky,[135,160,200],70),
     ];
     this.texAtlas=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D_ARRAY,this.texAtlas);
     gl.texImage3D(gl.TEXTURE_2D_ARRAY,0,gl.RGBA,s,s,texs.length,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
@@ -520,7 +493,6 @@ class Renderer {
 
   _initSpriteTextures() {
     const gl=this.gl,stg=this.spriteTexGen,s=64;
-    // Outdoor sprites: 0=pine, 1=tree, 2=building, 3=rock, 4=wreckage, 5=tower
     const stexs=[stg.tree(42),stg.tree2(43),stg.building(44),stg.rock(45),stg.wreckage(46),stg.tower(47)];
     this.spriteAtlas=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D_ARRAY,this.spriteAtlas);
     gl.texImage3D(gl.TEXTURE_2D_ARRAY,0,gl.RGBA,s,s,stexs.length,0,gl.RGBA,gl.UNSIGNED_BYTE,null);
@@ -692,30 +664,22 @@ class Visibility {
   isDiscovered(gx,gy) { return this.discovered.has(`${gx},${gy}`); }
 }
 
-// ─── MECH MOVEMENT (with momentum) ───
+// ─── MECH MOVEMENT ───
 class MechMovement {
-  constructor(world) {
-    this.world=world;
-  }
+  constructor(world) { this.world=world; }
   move(mech,dt) {
-    // Apply velocity
     const newX = mech.x + mech.velocity.x * dt;
     const newY = mech.y + mech.velocity.y * dt;
     const r = mech.radius || 0.3;
 
-    // Check collision
     if(this._canMove(newX, newY, r)) {
-      mech.x = newX;
-      mech.y = newY;
+      mech.x = newX; mech.y = newY;
     } else if(this._canMove(newX, mech.y, r)) {
-      mech.x = newX;
-      mech.velocity.y *= 0.5; // Wall slide
+      mech.x = newX; mech.velocity.y *= 0.5;
     } else if(this._canMove(mech.x, newY, r)) {
-      mech.y = newY;
-      mech.velocity.x *= 0.5;
+      mech.y = newY; mech.velocity.x *= 0.5;
     } else {
-      mech.velocity.x *= 0.3;
-      mech.velocity.y *= 0.3;
+      mech.velocity.x *= 0.3; mech.velocity.y *= 0.3;
     }
   }
   _canMove(x,y,r) {
@@ -743,7 +707,7 @@ class Minimap {
   constructor(cfg={}) { this.fov=cfg.fov||Math.PI*0.55; }
   init(canvas) { this.canvas=canvas; this.ctx=canvas.getContext('2d'); this.resize(); window.addEventListener('resize',()=>this.resize()); }
   resize() { const c=this.canvas.parentElement; const sz=Math.min(c.clientWidth-16,c.clientHeight-24); this.canvas.width=sz; this.canvas.height=sz; }
-  render(world,vis,px,py,legAngle,torsoAngle,sprites) {
+  render(world,vis,px,py,legAngle,torsoAngle,velocityAngle,sprites) {
     const ctx=this.ctx,w=this.canvas.width,h=this.canvas.height,cw=w/world.width,ch=h/world.height;
     ctx.fillStyle='#030305'; ctx.fillRect(0,0,w,h);
     for(let gy=0;gy<world.height;gy++) for(let gx=0;gx<world.width;gx++) {
@@ -751,15 +715,18 @@ class Minimap {
       let col; if(!d&&!v) col='#050508'; else if(!sec.walkable) col=v?'#3a3a45':'#1a1a22'; else if(v) { const c=sec.floorColor; col=`rgb(${c[0]*0.6|0},${c[1]*0.6|0},${c[2]*0.6|0})`; } else col='#121215';
       ctx.fillStyle=col; ctx.fillRect(gx*cw,gy*ch,cw+0.5,ch+0.5);
     }
-    // Sprites
     ctx.fillStyle='#336633';
     for(const sp of sprites) { ctx.beginPath(); ctx.arc(sp.x*cw,sp.y*ch,2,0,Math.PI*2); ctx.fill(); }
-    // Player mech
     const mx=px*cw,my=py*ch;
-    // Legs direction
+    // Velocity direction (yellow)
+    if(velocityAngle !== null) {
+      ctx.strokeStyle='#ffaa00'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(mx,my); ctx.lineTo(mx+Math.cos(velocityAngle)*14,my+Math.sin(velocityAngle)*14); ctx.stroke();
+    }
+    // Legs direction (gray)
     ctx.strokeStyle='#666'; ctx.lineWidth=3;
     ctx.beginPath(); ctx.moveTo(mx,my); ctx.lineTo(mx+Math.cos(legAngle)*10,my+Math.sin(legAngle)*10); ctx.stroke();
-    // Torso direction
+    // Torso direction (green)
     ctx.strokeStyle='#33ff33'; ctx.lineWidth=2;
     ctx.beginPath(); ctx.moveTo(mx,my); ctx.lineTo(mx+Math.cos(torsoAngle)*12,my+Math.sin(torsoAngle)*12); ctx.stroke();
     // Center
@@ -768,28 +735,593 @@ class Minimap {
   }
 }
 
-// ─── OVERLAY ───
-class Overlay {
-  init(canvas) { this.canvas=canvas; this.ctx=canvas.getContext('2d'); this.resize(); window.addEventListener('resize',()=>this.resize()); }
-  resize() { const c=this.canvas.parentElement; this.width=c.clientWidth; this.height=c.clientHeight; this.canvas.width=this.width; this.canvas.height=this.height; }
-  render(torsoOffset) {
-    const ctx=this.ctx,w=this.width,h=this.height;
-    ctx.clearRect(0,0,w,h);
+// ═══════════════════════════════════════════════════════════════════════════
+// COCKPIT HUD - Wing Commander Style
+// ═══════════════════════════════════════════════════════════════════════════
+
+class CockpitHUD {
+  constructor() {
+    this.chassisVariant = 0; // Different cockpit styles per mech
+    this.warningFlash = 0;
+    this.damageFlash = 0;
+  }
+
+  init(canvas) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d');
+    this.resize();
+    window.addEventListener('resize', () => this.resize());
+  }
+
+  resize() {
+    const c = this.canvas.parentElement;
+    this.width = c.clientWidth;
+    this.height = c.clientHeight;
+    this.canvas.width = this.width;
+    this.canvas.height = this.height;
+  }
+
+  render(mech, time) {
+    const ctx = this.ctx, w = this.width, h = this.height;
+    ctx.clearRect(0, 0, w, h);
+
+    // Calculate derived values
+    const speed = Math.sqrt(mech.velocity.x ** 2 + mech.velocity.y ** 2) * 3.6;
+    const heatPct = mech.heat / mech.maxHeat;
+    const throttlePct = mech.throttle;
+
+    // Velocity angle (direction of actual movement)
+    let velocityAngle = null;
+    if (speed > 1) {
+      velocityAngle = Math.atan2(mech.velocity.y, mech.velocity.x);
+    }
+
+    // Draw cockpit frame
+    this._drawCockpitFrame(ctx, w, h);
+
+    // Draw left console (throttle, speed)
+    this._drawLeftConsole(ctx, w, h, throttlePct, speed, mech.maxSpeed);
+
+    // Draw right console (heat, armor)
+    this._drawRightConsole(ctx, w, h, heatPct, mech.armor || 1.0, time);
+
+    // Draw center console (targeting, velocity vector)
+    this._drawCenterHUD(ctx, w, h, mech, velocityAngle, speed);
+
+    // Draw indicator lights panel
+    this._drawIndicatorLights(ctx, w, h, mech, heatPct, time);
+
+    // Draw compass/heading
+    this._drawCompass(ctx, w, h, mech.torsoAngle, mech.legAngle);
+
     // Vignette
-    const vig=ctx.createRadialGradient(w/2,h/2,h*0.2,w/2,h/2,h*0.9);
-    vig.addColorStop(0,'rgba(0,0,0,0)'); vig.addColorStop(1,'rgba(0,0,0,0.5)');
-    ctx.fillStyle=vig; ctx.fillRect(0,0,w,h);
-    // Crosshair
-    ctx.strokeStyle='rgba(51,255,51,0.8)'; ctx.lineWidth=2;
+    const vig = ctx.createRadialGradient(w/2, h/2, h*0.3, w/2, h/2, h*0.85);
+    vig.addColorStop(0, 'rgba(0,0,0,0)');
+    vig.addColorStop(1, 'rgba(0,0,0,0.6)');
+    ctx.fillStyle = vig;
+    ctx.fillRect(0, 0, w, h);
+  }
+
+  _drawCockpitFrame(ctx, w, h) {
+    // Main cockpit frame - angled panels
+    ctx.fillStyle = '#1a1a1f';
+    ctx.strokeStyle = '#2a2a30';
+    ctx.lineWidth = 2;
+
+    // Bottom panel (main console)
     ctx.beginPath();
-    ctx.moveTo(w/2-20,h/2); ctx.lineTo(w/2-8,h/2);
-    ctx.moveTo(w/2+8,h/2); ctx.lineTo(w/2+20,h/2);
-    ctx.moveTo(w/2,h/2-20); ctx.lineTo(w/2,h/2-8);
-    ctx.moveTo(w/2,h/2+8); ctx.lineTo(w/2,h/2+20);
+    ctx.moveTo(0, h);
+    ctx.lineTo(0, h * 0.78);
+    ctx.lineTo(w * 0.15, h * 0.72);
+    ctx.lineTo(w * 0.35, h * 0.75);
+    ctx.lineTo(w * 0.5, h * 0.78);
+    ctx.lineTo(w * 0.65, h * 0.75);
+    ctx.lineTo(w * 0.85, h * 0.72);
+    ctx.lineTo(w, h * 0.78);
+    ctx.lineTo(w, h);
+    ctx.closePath();
+    ctx.fill();
     ctx.stroke();
+
+    // Left strut
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(w * 0.08, 0);
+    ctx.lineTo(w * 0.12, h * 0.3);
+    ctx.lineTo(w * 0.08, h * 0.72);
+    ctx.lineTo(0, h * 0.78);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Right strut
+    ctx.beginPath();
+    ctx.moveTo(w, 0);
+    ctx.lineTo(w * 0.92, 0);
+    ctx.lineTo(w * 0.88, h * 0.3);
+    ctx.lineTo(w * 0.92, h * 0.72);
+    ctx.lineTo(w, h * 0.78);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Top frame
+    ctx.beginPath();
+    ctx.moveTo(w * 0.08, 0);
+    ctx.lineTo(w * 0.92, 0);
+    ctx.lineTo(w * 0.88, h * 0.05);
+    ctx.lineTo(w * 0.12, h * 0.05);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Panel details (rivets/screws)
+    ctx.fillStyle = '#333';
+    for (let i = 0; i < 8; i++) {
+      ctx.beginPath();
+      ctx.arc(w * 0.05, h * 0.1 + i * (h * 0.08), 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(w * 0.95, h * 0.1 + i * (h * 0.08), 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  _drawLeftConsole(ctx, w, h, throttlePct, speed, maxSpeed) {
+    const consoleX = w * 0.03;
+    const consoleY = h * 0.73;
+    const consoleW = w * 0.18;
+    const consoleH = h * 0.24;
+
+    // Console background
+    ctx.fillStyle = '#0a0a0c';
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(consoleX, consoleY, consoleW, consoleH, 4);
+    ctx.fill();
+    ctx.stroke();
+
+    // THROTTLE label
+    ctx.fillStyle = '#666';
+    ctx.font = '10px "Share Tech Mono"';
+    ctx.fillText('THROTTLE', consoleX + 8, consoleY + 14);
+
+    // Throttle gauge (vertical bar with needle)
+    const gaugeX = consoleX + 20;
+    const gaugeY = consoleY + 22;
+    const gaugeW = 30;
+    const gaugeH = consoleH - 50;
+
+    // Gauge background
+    ctx.fillStyle = '#111';
+    ctx.fillRect(gaugeX, gaugeY, gaugeW, gaugeH);
+
+    // Gauge markings
+    ctx.strokeStyle = '#444';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 10; i++) {
+      const y = gaugeY + gaugeH * (1 - i / 10);
+      ctx.beginPath();
+      ctx.moveTo(gaugeX, y);
+      ctx.lineTo(gaugeX + (i % 5 === 0 ? 8 : 4), y);
+      ctx.stroke();
+    }
+
+    // Zero line (center for reverse)
+    const zeroY = gaugeY + gaugeH * 0.77; // 30% reverse range
+    ctx.strokeStyle = '#ff6633';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(gaugeX, zeroY);
+    ctx.lineTo(gaugeX + gaugeW, zeroY);
+    ctx.stroke();
+
+    // Throttle fill
+    const normalizedThrottle = (throttlePct + 0.3) / 1.3; // -0.3 to 1.0 -> 0 to 1
+    const fillH = normalizedThrottle * gaugeH;
+    const fillY = gaugeY + gaugeH - fillH;
+
+    const throttleGrad = ctx.createLinearGradient(gaugeX, gaugeY + gaugeH, gaugeX, gaugeY);
+    if (throttlePct < 0) {
+      throttleGrad.addColorStop(0, '#ff3333');
+      throttleGrad.addColorStop(0.3, '#ff6633');
+    } else {
+      throttleGrad.addColorStop(0, '#33aa33');
+      throttleGrad.addColorStop(0.5, '#33ff33');
+      throttleGrad.addColorStop(1, '#aaff33');
+    }
+    ctx.fillStyle = throttleGrad;
+    ctx.fillRect(gaugeX + 2, fillY, gaugeW - 4, fillH);
+
+    // Throttle percentage
+    ctx.fillStyle = throttlePct < 0 ? '#ff6633' : '#33ff33';
+    ctx.font = 'bold 14px "Orbitron"';
+    ctx.textAlign = 'right';
+    ctx.fillText((throttlePct * 100).toFixed(0) + '%', consoleX + consoleW - 10, gaugeY + gaugeH / 2);
+    ctx.textAlign = 'left';
+
+    // SPEED dial gauge
+    const dialX = consoleX + consoleW - 50;
+    const dialY = consoleY + consoleH - 35;
+    const dialR = 28;
+
+    this._drawDialGauge(ctx, dialX, dialY, dialR, speed, maxSpeed, 'KPH', '#33ff33');
+  }
+
+  _drawRightConsole(ctx, w, h, heatPct, armorPct, time) {
+    const consoleX = w * 0.79;
+    const consoleY = h * 0.73;
+    const consoleW = w * 0.18;
+    const consoleH = h * 0.24;
+
+    // Console background
+    ctx.fillStyle = '#0a0a0c';
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(consoleX, consoleY, consoleW, consoleH, 4);
+    ctx.fill();
+    ctx.stroke();
+
+    // HEAT label
+    ctx.fillStyle = '#666';
+    ctx.font = '10px "Share Tech Mono"';
+    ctx.fillText('REACTOR HEAT', consoleX + 8, consoleY + 14);
+
+    // Heat gauge (vertical thermometer style)
+    const gaugeX = consoleX + consoleW - 45;
+    const gaugeY = consoleY + 22;
+    const gaugeW = 25;
+    const gaugeH = consoleH - 50;
+
+    // Gauge background
+    ctx.fillStyle = '#111';
+    ctx.strokeStyle = '#333';
+    ctx.beginPath();
+    ctx.roundRect(gaugeX, gaugeY, gaugeW, gaugeH, 4);
+    ctx.fill();
+    ctx.stroke();
+
+    // Danger zone markings
+    ctx.fillStyle = 'rgba(255,50,50,0.2)';
+    ctx.fillRect(gaugeX + 2, gaugeY + 2, gaugeW - 4, gaugeH * 0.3);
+
+    // Warning zone
+    ctx.fillStyle = 'rgba(255,170,50,0.15)';
+    ctx.fillRect(gaugeX + 2, gaugeY + gaugeH * 0.3, gaugeW - 4, gaugeH * 0.2);
+
+    // Heat fill
+    const fillH = heatPct * (gaugeH - 4);
+    const fillY = gaugeY + gaugeH - 2 - fillH;
+
+    let heatColor;
+    if (heatPct > 0.9) {
+      heatColor = `rgba(255,50,50,${0.8 + Math.sin(time * 10) * 0.2})`;
+    } else if (heatPct > 0.7) {
+      heatColor = '#ff6633';
+    } else if (heatPct > 0.5) {
+      heatColor = '#ffaa33';
+    } else {
+      heatColor = '#33ff33';
+    }
+    ctx.fillStyle = heatColor;
+    ctx.fillRect(gaugeX + 4, fillY, gaugeW - 8, fillH);
+
+    // Heat percentage
+    ctx.fillStyle = heatPct > 0.7 ? '#ff6633' : '#33ff33';
+    ctx.font = 'bold 12px "Orbitron"';
+    ctx.fillText((heatPct * 100).toFixed(0) + '°', consoleX + 10, gaugeY + 20);
+
+    // Armor dial gauge
+    const dialX = consoleX + 45;
+    const dialY = consoleY + consoleH - 35;
+    const dialR = 28;
+
+    this._drawDialGauge(ctx, dialX, dialY, dialR, armorPct * 100, 100, 'ARM', armorPct > 0.5 ? '#33ff33' : armorPct > 0.25 ? '#ffaa33' : '#ff3333');
+  }
+
+  _drawDialGauge(ctx, x, y, r, value, max, label, color) {
+    // Dial background
+    ctx.fillStyle = '#0a0a0c';
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Dial arc (270 degrees)
+    const startAngle = Math.PI * 0.75;
+    const endAngle = Math.PI * 2.25;
+    const arcRange = endAngle - startAngle;
+
+    // Background arc
+    ctx.strokeStyle = '#222';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(x, y, r - 6, startAngle, endAngle);
+    ctx.stroke();
+
+    // Value arc
+    const valueAngle = startAngle + (Math.min(value, max) / max) * arcRange;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 4;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 5;
+    ctx.beginPath();
+    ctx.arc(x, y, r - 6, startAngle, valueAngle);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Tick marks
+    ctx.strokeStyle = '#444';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 10; i++) {
+      const tickAngle = startAngle + (i / 10) * arcRange;
+      const inner = r - 12;
+      const outer = r - (i % 5 === 0 ? 16 : 14);
+      ctx.beginPath();
+      ctx.moveTo(x + Math.cos(tickAngle) * inner, y + Math.sin(tickAngle) * inner);
+      ctx.lineTo(x + Math.cos(tickAngle) * outer, y + Math.sin(tickAngle) * outer);
+      ctx.stroke();
+    }
+
+    // Needle
+    ctx.strokeStyle = '#ff3333';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + Math.cos(valueAngle) * (r - 10), y + Math.sin(valueAngle) * (r - 10));
+    ctx.stroke();
+
+    // Center cap
+    ctx.fillStyle = '#333';
+    ctx.beginPath();
+    ctx.arc(x, y, 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Label
+    ctx.fillStyle = '#666';
+    ctx.font = '8px "Share Tech Mono"';
+    ctx.textAlign = 'center';
+    ctx.fillText(label, x, y + r + 10);
+    ctx.textAlign = 'left';
+  }
+
+  _drawCenterHUD(ctx, w, h, mech, velocityAngle, speed) {
+    const cx = w / 2;
+    const cy = h / 2;
+
+    // Targeting reticle
+    ctx.strokeStyle = 'rgba(51,255,51,0.8)';
+    ctx.lineWidth = 2;
+
+    // Outer brackets
+    const bracketSize = 40;
+    const bracketGap = 30;
+
+    // Top-left bracket
+    ctx.beginPath();
+    ctx.moveTo(cx - bracketGap - bracketSize, cy - bracketGap);
+    ctx.lineTo(cx - bracketGap, cy - bracketGap);
+    ctx.lineTo(cx - bracketGap, cy - bracketGap - bracketSize);
+    ctx.stroke();
+
+    // Top-right bracket
+    ctx.beginPath();
+    ctx.moveTo(cx + bracketGap + bracketSize, cy - bracketGap);
+    ctx.lineTo(cx + bracketGap, cy - bracketGap);
+    ctx.lineTo(cx + bracketGap, cy - bracketGap - bracketSize);
+    ctx.stroke();
+
+    // Bottom-left bracket
+    ctx.beginPath();
+    ctx.moveTo(cx - bracketGap - bracketSize, cy + bracketGap);
+    ctx.lineTo(cx - bracketGap, cy + bracketGap);
+    ctx.lineTo(cx - bracketGap, cy + bracketGap + bracketSize);
+    ctx.stroke();
+
+    // Bottom-right bracket
+    ctx.beginPath();
+    ctx.moveTo(cx + bracketGap + bracketSize, cy + bracketGap);
+    ctx.lineTo(cx + bracketGap, cy + bracketGap);
+    ctx.lineTo(cx + bracketGap, cy + bracketGap + bracketSize);
+    ctx.stroke();
+
+    // Inner crosshair
+    ctx.strokeStyle = 'rgba(51,255,51,0.9)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cx - 15, cy); ctx.lineTo(cx - 5, cy);
+    ctx.moveTo(cx + 5, cy); ctx.lineTo(cx + 15, cy);
+    ctx.moveTo(cx, cy - 15); ctx.lineTo(cx, cy - 5);
+    ctx.moveTo(cx, cy + 5); ctx.lineTo(cx, cy + 15);
+    ctx.stroke();
+
     // Center dot
-    ctx.fillStyle='#33ff33';
-    ctx.beginPath(); ctx.arc(w/2,h/2,2,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#33ff33';
+    ctx.beginPath();
+    ctx.arc(cx, cy, 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Velocity vector indicator (shows direction of actual movement)
+    if (velocityAngle !== null && speed > 2) {
+      // Calculate screen position of velocity vector relative to torso angle
+      const relativeAngle = velocityAngle - mech.torsoAngle;
+
+      // Project onto screen (limited range)
+      const maxOffset = 80;
+      const vvX = cx + Math.sin(relativeAngle) * Math.min(speed * 2, maxOffset);
+      const vvY = cy - Math.cos(relativeAngle) * Math.min(speed * 0.8, maxOffset * 0.4);
+
+      // Velocity vector marker (flight path marker style)
+      ctx.strokeStyle = '#ffaa00';
+      ctx.lineWidth = 2;
+
+      // Circle
+      ctx.beginPath();
+      ctx.arc(vvX, vvY, 8, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Wings
+      ctx.beginPath();
+      ctx.moveTo(vvX - 8, vvY);
+      ctx.lineTo(vvX - 16, vvY);
+      ctx.moveTo(vvX + 8, vvY);
+      ctx.lineTo(vvX + 16, vvY);
+      // Tail
+      ctx.moveTo(vvX, vvY + 8);
+      ctx.lineTo(vvX, vvY + 14);
+      ctx.stroke();
+    }
+
+    // Speed readout (large, center bottom)
+    ctx.fillStyle = '#33ff33';
+    ctx.font = 'bold 28px "Orbitron"';
+    ctx.textAlign = 'center';
+    ctx.shadowColor = '#33ff33';
+    ctx.shadowBlur = 10;
+    ctx.fillText(speed.toFixed(0), cx, h * 0.88);
+    ctx.font = '12px "Share Tech Mono"';
+    ctx.fillStyle = '#666';
+    ctx.shadowBlur = 0;
+    ctx.fillText('KPH', cx, h * 0.91);
+    ctx.textAlign = 'left';
+  }
+
+  _drawIndicatorLights(ctx, w, h, mech, heatPct, time) {
+    const panelX = w * 0.35;
+    const panelY = h * 0.76;
+    const panelW = w * 0.30;
+
+    // Panel background
+    ctx.fillStyle = 'rgba(10,10,12,0.9)';
+    ctx.beginPath();
+    ctx.roundRect(panelX, panelY, panelW, 22, 3);
+    ctx.fill();
+
+    // Indicator lights
+    const lights = [
+      { label: 'PWR', on: true, color: '#33ff33' },
+      { label: 'THRT', on: Math.abs(mech.throttle) > 0.1, color: '#33ff33' },
+      { label: 'HEAT', on: heatPct > 0.5, color: heatPct > 0.8 ? '#ff3333' : '#ffaa33', blink: heatPct > 0.8 },
+      { label: 'LOCK', on: false, color: '#ff3333' },
+      { label: 'WEAP', on: true, color: '#33ff33' },
+      { label: 'AMMO', on: true, color: '#33ff33' },
+    ];
+
+    const lightSpacing = panelW / lights.length;
+
+    lights.forEach((light, i) => {
+      const lx = panelX + 15 + i * lightSpacing;
+      const ly = panelY + 11;
+
+      // Light housing
+      ctx.fillStyle = '#1a1a1a';
+      ctx.strokeStyle = '#333';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(lx, ly, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Light
+      let isOn = light.on;
+      if (light.blink) {
+        isOn = isOn && Math.sin(time * 8) > 0;
+      }
+
+      if (isOn) {
+        ctx.fillStyle = light.color;
+        ctx.shadowColor = light.color;
+        ctx.shadowBlur = 8;
+      } else {
+        ctx.fillStyle = '#222';
+        ctx.shadowBlur = 0;
+      }
+      ctx.beginPath();
+      ctx.arc(lx, ly, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      // Label
+      ctx.fillStyle = '#555';
+      ctx.font = '7px "Share Tech Mono"';
+      ctx.textAlign = 'center';
+      ctx.fillText(light.label, lx, ly + 16);
+    });
+    ctx.textAlign = 'left';
+  }
+
+  _drawCompass(ctx, w, h, torsoAngle, legAngle) {
+    const cx = w / 2;
+    const cy = h * 0.06;
+    const compassW = 200;
+
+    // Compass background
+    ctx.fillStyle = 'rgba(10,10,12,0.9)';
+    ctx.beginPath();
+    ctx.roundRect(cx - compassW/2, cy - 12, compassW, 24, 3);
+    ctx.fill();
+
+    // Convert angle to heading (0-360, 0=North)
+    let heading = (-torsoAngle * 180 / Math.PI + 90) % 360;
+    if (heading < 0) heading += 360;
+
+    // Draw compass tape
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(cx - compassW/2 + 5, cy - 10, compassW - 10, 20);
+    ctx.clip();
+
+    ctx.font = '10px "Share Tech Mono"';
+    ctx.textAlign = 'center';
+
+    const cardinals = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+
+    for (let deg = -180; deg <= 540; deg += 15) {
+      const relDeg = ((deg - heading + 180) % 360) - 180;
+      const x = cx + relDeg * 1.5;
+
+      if (x < cx - compassW/2 || x > cx + compassW/2) continue;
+
+      const normDeg = ((deg % 360) + 360) % 360;
+
+      if (normDeg % 45 === 0) {
+        // Cardinal/intercardinal
+        const idx = normDeg / 45;
+        ctx.fillStyle = normDeg === 0 ? '#ff3333' : '#33ff33';
+        ctx.fillText(cardinals[idx], x, cy + 4);
+      } else if (normDeg % 15 === 0) {
+        // Tick mark
+        ctx.strokeStyle = '#444';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x, cy - 6);
+        ctx.lineTo(x, cy + 6);
+        ctx.stroke();
+      }
+    }
+
+    ctx.restore();
+
+    // Center marker
+    ctx.strokeStyle = '#33ff33';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - 12);
+    ctx.lineTo(cx, cy - 8);
+    ctx.moveTo(cx, cy + 8);
+    ctx.lineTo(cx, cy + 12);
+    ctx.stroke();
+
+    // Heading readout
+    ctx.fillStyle = '#33ff33';
+    ctx.font = 'bold 10px "Orbitron"';
+    ctx.textAlign = 'center';
+    ctx.fillText(heading.toFixed(0).padStart(3, '0') + '°', cx, cy + 24);
+    ctx.textAlign = 'left';
   }
 }
 
@@ -807,10 +1339,8 @@ const SECTOR_TYPES = {
 };
 
 function generateOverworld(world, spriteManager) {
-  // Fill with grass
   world.fillRect(1, 1, world.width-2, world.height-2, 'grass');
 
-  // Add some dirt patches
   for(let i = 0; i < 8; i++) {
     const cx = 5 + Math.floor(Math.random() * (world.width - 10));
     const cy = 5 + Math.floor(Math.random() * (world.height - 10));
@@ -818,32 +1348,25 @@ function generateOverworld(world, spriteManager) {
     world.fillRect(cx-r, cy-r, cx+r, cy+r, 'dirt');
   }
 
-  // Main road (horizontal)
   world.fillRect(1, 22, world.width-2, 25, 'road');
-  // Cross road (vertical)
   world.fillRect(22, 1, 25, world.height-2, 'road');
 
-  // Buildings cluster (town)
   const townX = 30, townY = 30;
   for(let i = 0; i < 5; i++) {
     const bx = townX + (i % 3) * 5;
     const by = townY + Math.floor(i / 3) * 5;
     world.fillRect(bx, by, bx+2, by+2, 'building');
-    // Building sprite
     spriteManager.add({ x: bx + 1.5, y: by + 1.5, texture: 2, scale: 2.5 });
   }
 
-  // Forest area (northwest)
   for(let i = 0; i < 40; i++) {
     const tx = 3 + Math.floor(Math.random() * 15);
     const ty = 3 + Math.floor(Math.random() * 15);
     if(world.getSector(tx, ty).walkable && world.getSector(tx, ty).name !== 'ROAD') {
-      // Don't place wall, just sprite
       spriteManager.add({ x: tx + 0.5, y: ty + 0.5, texture: Math.random() > 0.5 ? 0 : 1, scale: 1.5 + Math.random() * 0.5 });
     }
   }
 
-  // Scattered trees
   for(let i = 0; i < 30; i++) {
     const tx = 2 + Math.floor(Math.random() * (world.width - 4));
     const ty = 2 + Math.floor(Math.random() * (world.height - 4));
@@ -852,7 +1375,6 @@ function generateOverworld(world, spriteManager) {
     }
   }
 
-  // Rock formations
   for(let i = 0; i < 8; i++) {
     const rx = 5 + Math.floor(Math.random() * (world.width - 10));
     const ry = 5 + Math.floor(Math.random() * (world.height - 10));
@@ -862,11 +1384,9 @@ function generateOverworld(world, spriteManager) {
     }
   }
 
-  // Mech wreckage
   spriteManager.add({ x: 15.5, y: 35.5, texture: 4, scale: 2.0 });
   spriteManager.add({ x: 40.5, y: 10.5, texture: 4, scale: 1.8 });
 
-  // Radio towers
   spriteManager.add({ x: 8.5, y: 8.5, texture: 5, scale: 2.5 });
   spriteManager.add({ x: 42.5, y: 42.5, texture: 5, scale: 2.2 });
 }
@@ -882,15 +1402,16 @@ const mech = {
   torsoAngle: 0,
   velocity: { x: 0, y: 0 },
   throttle: 0,
-  maxSpeed: 86,       // KPH
-  acceleration: 25,   // KPH/s
-  turnRate: 1.0,      // rad/s for legs
-  torsoTurnRate: 2.5, // rad/s for torso
+  maxSpeed: 86,
+  acceleration: 25,
+  turnRate: 1.0,
+  torsoTurnRate: 2.5,
   torsoTwistLimit: Math.PI / 2.5,
   heat: 0,
   maxHeat: 30,
   heatDissipation: 2,
   radius: 0.4,
+  armor: 1.0,
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -907,28 +1428,23 @@ const visibility = new Visibility(world, { viewDistance: 22 });
 const mechMovement = new MechMovement(world);
 const input = new Input();
 const renderer = new Renderer({ rayCount: 500, maxDepth: 22 });
-const overlay = new Overlay();
+const cockpitHUD = new CockpitHUD();
 const minimap = new Minimap();
 const lighting = new LightingSystem();
 
-// Outdoor ambient (bright daylight)
 lighting.setAmbient(0.35);
-
-// Sun-like directional approximation (bright areas)
 lighting.addLight({ x: 24, y: 24, radius: 30, intensity: 0.3, color: [1, 0.98, 0.9], flicker: 0 });
 
-// Flashlight
 const flashlight = lighting.addLight({ x: mech.x, y: mech.y, radius: 10, intensity: 0, color: [1, 1, 0.95], type: 'player' });
 let flashlightOn = false;
 
 renderer.init(document.getElementById('game-canvas'));
 renderer.updateWorldMap(world);
-overlay.init(document.getElementById('overlay-canvas'));
+cockpitHUD.init(document.getElementById('cockpit-canvas'));
 minimap.init(document.getElementById('minimap-canvas'));
 input.init(document.getElementById('viewport'));
 visibility.update(mech.x, mech.y);
 
-// UI controls
 document.getElementById('tune-rays').addEventListener('input', e => {
   renderer.setRayCount(parseInt(e.target.value));
   document.getElementById('tune-rays-val').textContent = e.target.value;
@@ -954,39 +1470,34 @@ let lastFKey = false;
 // GAME LOOP
 // ═══════════════════════════════════════════════════════════════════════════
 
-let lastTime = 0, uiTimer = 0;
+let lastTime = 0, uiTimer = 0, gameTime = 0;
 
 function gameLoop(time) {
   profiler.start('frame');
   const dt = Math.min((time - lastTime) / 1000, 0.1);
   lastTime = time;
+  gameTime += dt;
 
   // ─── INPUT PROCESSING ───
 
-  // Throttle control (W/S)
   if (input.keys['KeyW']) {
     mech.throttle = Math.min(1, mech.throttle + dt * 0.8);
   } else if (input.keys['KeyS']) {
     mech.throttle = Math.max(-0.3, mech.throttle - dt * 0.8);
   } else {
-    // Throttle decay
     mech.throttle *= 0.95;
     if (Math.abs(mech.throttle) < 0.01) mech.throttle = 0;
   }
 
-  // Leg turning (A/D)
   if (input.keys['KeyA']) mech.legAngle -= mech.turnRate * dt;
   if (input.keys['KeyD']) mech.legAngle += mech.turnRate * dt;
 
-  // Normalize angles
   while (mech.legAngle < 0) mech.legAngle += Math.PI * 2;
   while (mech.legAngle >= Math.PI * 2) mech.legAngle -= Math.PI * 2;
 
-  // Torso follows mouse
   const mouseDX = input.consumeMouseDX();
   mech.torsoAngle += mouseDX * 0.003;
 
-  // Constrain torso to twist limits relative to legs
   let torsoOffset = mech.torsoAngle - mech.legAngle;
   while (torsoOffset > Math.PI) torsoOffset -= Math.PI * 2;
   while (torsoOffset < -Math.PI) torsoOffset += Math.PI * 2;
@@ -997,20 +1508,16 @@ function gameLoop(time) {
     mech.torsoAngle = mech.legAngle - mech.torsoTwistLimit;
   }
 
-  // Flashlight toggle
   if (input.keys['KeyF'] && !lastFKey) {
     flashlightOn = !flashlightOn;
     flashlight.intensity = flashlightOn ? 1.2 : 0;
-    showMessage(flashlightOn ? '🔦 Flashlight ON' : '🔦 Flashlight OFF');
+    showMessage(flashlightOn ? 'SPOTLIGHT ON' : 'SPOTLIGHT OFF');
   }
   lastFKey = input.keys['KeyF'];
 
   // ─── MECH PHYSICS ───
 
-  // Calculate target speed
-  const targetSpeed = mech.throttle * mech.maxSpeed / 3.6; // Convert KPH to m/s (sort of)
-
-  // Accelerate/decelerate towards target (LEGS direction, not torso!)
+  const targetSpeed = mech.throttle * mech.maxSpeed / 3.6;
   const currentSpeed = Math.sqrt(mech.velocity.x ** 2 + mech.velocity.y ** 2);
   const speedDiff = targetSpeed - currentSpeed;
   const accel = Math.sign(speedDiff) * Math.min(Math.abs(speedDiff), mech.acceleration * dt);
@@ -1018,14 +1525,11 @@ function gameLoop(time) {
   const targetVelX = Math.cos(mech.legAngle) * (currentSpeed + accel);
   const targetVelY = Math.sin(mech.legAngle) * (currentSpeed + accel);
 
-  // Smooth velocity transition (momentum)
   mech.velocity.x += (targetVelX - mech.velocity.x) * 0.1;
   mech.velocity.y += (targetVelY - mech.velocity.y) * 0.1;
 
-  // Apply movement
   mechMovement.move(mech, dt);
 
-  // Heat dissipation
   mech.heat = Math.max(0, mech.heat - mech.heatDissipation * dt);
 
   // ─── UPDATE SYSTEMS ───
@@ -1036,10 +1540,16 @@ function gameLoop(time) {
 
   // ─── RENDER ───
 
-  // Render from TORSO angle (where player is looking)
   renderer.render(world, visibility, mech.x, mech.y, mech.torsoAngle, lighting, spriteManager);
-  overlay.render(torsoOffset);
-  minimap.render(world, visibility, mech.x, mech.y, mech.legAngle, mech.torsoAngle, spriteManager.sprites);
+  cockpitHUD.render(mech, gameTime);
+
+  // Calculate velocity angle for minimap
+  const speed = Math.sqrt(mech.velocity.x ** 2 + mech.velocity.y ** 2) * 3.6;
+  let velocityAngle = null;
+  if (speed > 1) {
+    velocityAngle = Math.atan2(mech.velocity.y, mech.velocity.x);
+  }
+  minimap.render(world, visibility, mech.x, mech.y, mech.legAngle, mech.torsoAngle, velocityAngle, spriteManager.sprites);
 
   profiler.end('frame');
 
@@ -1050,7 +1560,6 @@ function gameLoop(time) {
     uiTimer = 0;
     const frame = profiler.getAvg('frame');
     const fps = frame > 0 ? 1000 / frame : 0;
-    const speed = Math.sqrt(mech.velocity.x ** 2 + mech.velocity.y ** 2) * 3.6;
     const heatPct = (mech.heat / mech.maxHeat) * 100;
 
     document.getElementById('stat-fps').textContent = fps.toFixed(0);
@@ -1065,11 +1574,6 @@ function gameLoop(time) {
     document.getElementById('perf-walls').textContent = profiler.getAvg('walls').toFixed(2) + 'ms';
     document.getElementById('perf-floors').textContent = profiler.getAvg('floors').toFixed(2) + 'ms';
     document.getElementById('perf-sprites').textContent = profiler.getAvg('sprites').toFixed(2) + 'ms';
-
-    // HUD elements
-    document.getElementById('heat-fill').style.height = heatPct + '%';
-    document.getElementById('speed-display').textContent = speed.toFixed(0) + ' KPH';
-    document.getElementById('throttle-fill').style.width = ((mech.throttle + 0.3) / 1.3 * 100) + '%';
   }
 
   requestAnimationFrame(gameLoop);
@@ -1081,8 +1585,9 @@ console.log('  GIGAMECH - OVERWORLD ALPHA');
 console.log('  World size: 48x48');
 console.log('  Sprites:', spriteManager.sprites.length);
 console.log('═══════════════════════════════════════════════════');
-showMessage('🤖 REACTOR ONLINE');
-showMessage('🎮 WASD: Move | Mouse: Aim Torso | F: Light');
+showMessage('REACTOR ONLINE');
+showMessage('WEAPONS ONLINE');
+showMessage('ALL SYSTEMS NOMINAL');
 requestAnimationFrame(gameLoop);
 </script>
 </body>
