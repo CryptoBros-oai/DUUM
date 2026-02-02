@@ -381,24 +381,30 @@ class Renderer {
   
   _initSpriteProg() {
     const vs=`#version 300 es
-      in vec2 aPos; in vec2 aUV; in float aTex; in float aLight; in vec3 aTint;
-      out vec2 vUV; flat out int vTex; out float vLight; out vec3 vTint;
-      void main() { gl_Position=vec4(aPos,0,1); vUV=aUV; vTex=int(aTex); vLight=aLight; vTint=aTint; }`;
+      in vec2 aPos; in vec2 aUV; in float aTex; in float aLight; in vec3 aTint; in float aDist;
+      out vec2 vUV; out vec2 vScreenPos; flat out int vTex; out float vLight; out vec3 vTint; out float vDist;
+      void main() { gl_Position=vec4(aPos,0,1); vUV=aUV; vScreenPos=aPos; vTex=int(aTex); vLight=aLight; vTint=aTint; vDist=aDist; }`;
     const fs=`#version 300 es
-      precision highp float; precision highp sampler2DArray;
-      in vec2 vUV; flat in int vTex; in float vLight; in vec3 vTint;
+      precision highp float; precision highp sampler2DArray; precision highp sampler2D;
+      in vec2 vUV; in vec2 vScreenPos; flat in int vTex; in float vLight; in vec3 vTint; in float vDist;
       uniform sampler2DArray uSTex;
+      uniform sampler2D uWallDist;
+      uniform int uRayCount;
       out vec4 fc;
       void main() {
         vec4 c=texture(uSTex,vec3(vUV,float(vTex)));
         if(c.a<0.5) discard;
+        // Per-pixel wall occlusion: sample wall depth at this screen X
+        float screenU = (vScreenPos.x + 1.0) * 0.5; // -1..1 -> 0..1
+        float wallDist = texture(uWallDist, vec2(screenU * float(uRayCount) / 1024.0, 0.5)).r;
+        if(vDist >= wallDist) discard;
         c.rgb*=vLight; if(length(vTint)>0.01) c.rgb*=normalize(vec3(1)+vTint*0.5);
         fc=c;
       }`;
     this.spriteProg=this._program(vs,fs);
     const gl=this.gl;
-    this.sA={pos:gl.getAttribLocation(this.spriteProg,'aPos'),uv:gl.getAttribLocation(this.spriteProg,'aUV'),tex:gl.getAttribLocation(this.spriteProg,'aTex'),light:gl.getAttribLocation(this.spriteProg,'aLight'),tint:gl.getAttribLocation(this.spriteProg,'aTint')};
-    this.sU={tex:gl.getUniformLocation(this.spriteProg,'uSTex')};
+    this.sA={pos:gl.getAttribLocation(this.spriteProg,'aPos'),uv:gl.getAttribLocation(this.spriteProg,'aUV'),tex:gl.getAttribLocation(this.spriteProg,'aTex'),light:gl.getAttribLocation(this.spriteProg,'aLight'),tint:gl.getAttribLocation(this.spriteProg,'aTint'),dist:gl.getAttribLocation(this.spriteProg,'aDist')};
+    this.sU={tex:gl.getUniformLocation(this.spriteProg,'uSTex'),wallDist:gl.getUniformLocation(this.spriteProg,'uWallDist'),rayCount:gl.getUniformLocation(this.spriteProg,'uRayCount')};
   }
   
   _initBuffers() {
@@ -421,14 +427,15 @@ class Renderer {
     // Sprite VAO
     this.spriteVAO=gl.createVertexArray(); gl.bindVertexArray(this.spriteVAO);
     this.spriteBuf=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,this.spriteBuf);
-    const ss=9*4;
+    const ss=10*4; // 10 floats: pos(2), uv(2), tex(1), light(1), tint(3), dist(1)
     gl.enableVertexAttribArray(this.sA.pos); gl.vertexAttribPointer(this.sA.pos,2,gl.FLOAT,false,ss,0);
     gl.enableVertexAttribArray(this.sA.uv); gl.vertexAttribPointer(this.sA.uv,2,gl.FLOAT,false,ss,8);
     gl.enableVertexAttribArray(this.sA.tex); gl.vertexAttribPointer(this.sA.tex,1,gl.FLOAT,false,ss,16);
     gl.enableVertexAttribArray(this.sA.light); gl.vertexAttribPointer(this.sA.light,1,gl.FLOAT,false,ss,20);
     gl.enableVertexAttribArray(this.sA.tint); gl.vertexAttribPointer(this.sA.tint,3,gl.FLOAT,false,ss,24);
+    gl.enableVertexAttribArray(this.sA.dist); gl.vertexAttribPointer(this.sA.dist,1,gl.FLOAT,false,ss,36);
     gl.bindVertexArray(null);
-    this.wallData=new Float32Array(800*6*9); this.wallDistData=new Float32Array(1024); this.spriteData=new Float32Array(200*6*9);
+    this.wallData=new Float32Array(800*6*9); this.wallDistData=new Float32Array(1024); this.spriteData=new Float32Array(200*6*10);
   }
   
   _initTextures() {
@@ -546,28 +553,39 @@ class Renderer {
       const top=sH*0.35, bottom=-sH*0.65;
       if(right<-1||left>1) continue;
 
-      // Wall occlusion: find which column this sprite's center falls on
-      // Must match raycast: col i -> angle + ((i/rayCount) - 0.5) * fov
-      // Reverse: screenX = tan(relAngle), so relAngle = atan(screenX)
-      // col = (relAngle/fov + 0.5) * rayCount
-      const relAngle = Math.atan(sp.screenX);
-      const colFloat = (relAngle / this.fov + 0.5) * this.rayCount;
-      const col = Math.floor(Math.max(0, Math.min(this.rayCount - 1, colFloat)));
+      // Quick check: if sprite is completely behind walls across all its columns, skip entirely
+      // Convert screen X positions (-1 to 1) to texture U coords (0 to 1)
+      const leftU = (left + 1.0) * 0.5;
+      const rightU = (right + 1.0) * 0.5;
+      const leftCol = Math.floor(leftU * this.rayCount);
+      const rightCol = Math.floor(rightU * this.rayCount);
+      const colStart = Math.max(0, leftCol);
+      const colEnd = Math.min(this.rayCount - 1, rightCol);
 
-      // Compare depths - both are perpendicular distance
-      if (dist >= this.wallDistData[col]) continue;
+      // Check if ANY column has the sprite in front of the wall
+      let hasVisiblePortion = false;
+      for (let col = colStart; col <= colEnd; col++) {
+        if (dist < this.wallDistData[col]) {
+          hasVisiblePortion = true;
+          break;
+        }
+      }
+      if (!hasVisiblePortion) continue;
 
       const li=lighting.calcLightAt(sp.x,sp.y);
+      // 10 floats per vertex: pos(2), uv(2), tex(1), light(1), tint(3), dist(1)
       const verts=[[left,top,0,0],[right,top,1,0],[left,bottom,0,1],[right,top,1,0],[right,bottom,1,1],[left,bottom,0,1]];
-      for(let v=0;v<6;v++) { const idx=sv*9; sd[idx]=verts[v][0]; sd[idx+1]=verts[v][1]; sd[idx+2]=verts[v][2]; sd[idx+3]=verts[v][3]; sd[idx+4]=sp.texture; sd[idx+5]=li.intensity; sd[idx+6]=li.tint[0]; sd[idx+7]=li.tint[1]; sd[idx+8]=li.tint[2]; sv++; }
+      for(let v=0;v<6;v++) { const idx=sv*10; sd[idx]=verts[v][0]; sd[idx+1]=verts[v][1]; sd[idx+2]=verts[v][2]; sd[idx+3]=verts[v][3]; sd[idx+4]=sp.texture; sd[idx+5]=li.intensity; sd[idx+6]=li.tint[0]; sd[idx+7]=li.tint[1]; sd[idx+8]=li.tint[2]; sd[idx+9]=dist; sv++; }
     }
 
     this.spriteCount=sv/6;
     if(sv>0) {
       gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
       gl.useProgram(this.spriteProg); gl.bindVertexArray(this.spriteVAO);
-      gl.bindBuffer(gl.ARRAY_BUFFER,this.spriteBuf); gl.bufferData(gl.ARRAY_BUFFER,sd.subarray(0,sv*9),gl.DYNAMIC_DRAW);
+      gl.bindBuffer(gl.ARRAY_BUFFER,this.spriteBuf); gl.bufferData(gl.ARRAY_BUFFER,sd.subarray(0,sv*10),gl.DYNAMIC_DRAW);
       gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D_ARRAY,this.spriteAtlas); gl.uniform1i(this.sU.tex,0);
+      gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D,this.wallDistTex); gl.uniform1i(this.sU.wallDist,1);
+      gl.uniform1i(this.sU.rayCount,this.rayCount);
       gl.drawArrays(gl.TRIANGLES,0,sv); this.drawCalls++;
       gl.disable(gl.BLEND);
     }
@@ -803,6 +821,9 @@ function gameLoop(time) {
   requestAnimationFrame(gameLoop);
 }
 
+console.log('=== SECTOR ENGINE STARTED ===');
+console.log('Sprites loaded:', spriteManager.sprites.length);
+console.log('Ray count:', renderer.rayCount);
 showMessage('🎯 '+spriteManager.sprites.length+' sprites loaded');
 showMessage('🔦 Press F for flashlight');
 requestAnimationFrame(gameLoop);
